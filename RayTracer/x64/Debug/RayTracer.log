@@ -1,1 +1,4 @@
-﻿  RayTracer.vcxproj -> C:\Users\ryanb\source\repos\renderingBook\x64\Debug\RayTracer.exe
+﻿  rayTracer.c
+C:\Users\ryanb\source\repos\computerGraphicsFromScratch\RayTracer\rayTracer.c(73,11): warning C4018: '>=': signed/unsigned mismatch
+C:\Users\ryanb\source\repos\computerGraphicsFromScratch\RayTracer\rayTracer.c(73,31): warning C4018: '>=': signed/unsigned mismatch
+  RayTracer.vcxproj -> C:\Users\ryanb\Source\Repos\computerGraphicsFromScratch\x64\Debug\RayTracer.exe

@@ -67,8 +67,10 @@ uint32_t getColor(uint8_t red, uint8_t green, uint8_t blue) {
     return color;
 }
 
-/* putPixelRawVal - Puts a pixel of a specified color on the window, with the bottom left corner as the origin.
-*/
+/* 
+ * putPixelRawVal - Puts a pixel of a specified color on the window, with the bottom left corner as the origin.
+ * This function does check that the position is valid. If there is an issue, it prints the attempted value to stderr.
+ */
 void putPixelRawVal(uint32_t x, uint32_t y, uint32_t color) {
     if (x >= frame.width || y >= frame.height) {
         fprintf(stderr, "Pixel out of bounds! x: %d, y: %d\n", x, y);
@@ -77,6 +79,10 @@ void putPixelRawVal(uint32_t x, uint32_t y, uint32_t color) {
     frame.pixels[y * frame.width + x] = color;
 }
 
+/*
+ * putPixel - Plots a pixel on the screen of a specified color using the center of the screen as the origin.
+ * This function does check that the position is valid. If there is an issue, it prints the attempted value to stderr.
+ */
 void putPixel(int32_t x, int32_t y, uint32_t color) {
     int32_t offsetX = x + (frame.width / 2);
     int32_t offsetY = y + (frame.height / 2);
@@ -112,10 +118,12 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
             DispatchMessage(&message);
         }
 
-        for (int i = -frame.width / 2; i < frame.width / 2; i++) {
-            for (int j = -frame.height / 2; j < frame.height / 2; j++) {
-                putPixel(i, j, getColor(i % 256, j % 256, (i + j) % 256));
-            }
+        for (int i = -frame.height / 2; i <= frame.height / 2; i++) {
+            putPixel(0, i, getColor(255, 255, 255));
+        }
+
+        for (int i = -frame.width / 2; i <= frame.width / 2; i++) {
+            putPixel(i, 0, getColor(255, 255, 255));
         }
 
         InvalidateRect(windowHandle, NULL, FALSE);
