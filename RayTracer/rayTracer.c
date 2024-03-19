@@ -43,7 +43,6 @@ typedef struct sphereList {
 } sphereList;
 
 typedef struct sphereResult {
-    uint8_t status; // 0, 1, 2 for num solutions
     double firstT;
     double secondT;
 } sphereResult;
@@ -139,13 +138,13 @@ void putPixel(int32_t x, int32_t y, rgb *c) {
 }
 
 void canvasToViewport(int x, int y, vec3 *dest) {
-    dest->x = x * ((double) VIEWPORT_WIDTH / (double) frame.width);
-    dest->y = y * ((double) VIEWPORT_HEIGHT / (double) frame.height);
+    dest->x = x * ((double) VIEWPORT_WIDTH / frame.width);
+    dest->y = y * ((double) VIEWPORT_HEIGHT / frame.height);
     dest->z = (double)DISTANCE;
 }
 
 double dotProduct(vec3 *vector1, vec3 *vector2) {
-    return vector1->x * vector2->x + vector1->x * vector2->x + vector1->x * vector2->x;
+    return vector1->x * vector2->x + vector1->y * vector2->y + vector1->z * vector2->z;
 }
 
 vec3 vecSub(vec3 *vector1, vec3 *vector2) {
@@ -161,16 +160,16 @@ sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
 
     double a = dotProduct(direction, direction);
     double b = 2 * dotProduct(&offsetO, direction);
-    double c = 2 * dotProduct(&offsetO, &offsetO);
+    double c = dotProduct(&offsetO, &offsetO) - (radius*radius);
 
-    double discriminant = b * b - 4 * a * c;
+    double discriminant = (b * b) - (4 * a * c);
 
     if (discriminant < 0) {
-        return (sphereResult) { .status = 0, .firstT = DBL_MAX, .secondT = DBL_MAX };
+        return (sphereResult) {.firstT = DBL_MAX, .secondT = DBL_MAX };
     }
     double t1 = (-b + sqrt(discriminant)) / (2 * a);
     double t2 = (-b - sqrt(discriminant)) / (2 * a);
-    return (sphereResult) { .status = 2, .firstT = t1, .secondT = t2 };
+    return (sphereResult) { .firstT = t1, .secondT = t2 };
 }
 
 rgb* traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
@@ -187,13 +186,11 @@ rgb* traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
             closestT = result.secondT;
             closestSphere = &node->data;
         }
-
-        if (closestSphere == NULL) {
-            return &background;
-        }
-        return &closestSphere->color;
     }
-    return &background;
+    if (closestSphere == NULL) {
+        return &background;
+    }
+    return &closestSphere->color;
 }
 
 void renderScene() {
@@ -240,28 +237,28 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         return -1;
     }
 
-    red = (sphere){ .center = (vec3){.x = 0, .y = -1, .z = -3},
+    red = (sphere){ .center = (vec3){.x = 0.0, .y = -1.0, .z = -3.0},
     .radius = 1,
     .color = (rgb) {.red = 255, .green = 0, .blue = 0 }
     };
 
-    blue = (sphere){ .center = (vec3){.x = 2, .y = 0, .z = 4},
+    blue = (sphere){ .center = (vec3){.x = 2.0, .y = 0.0, .z = 4.0},
         .radius = 1,
         .color = (rgb) {.red = 0, .green = 0, .blue = 255 }
     };
 
-    green = (sphere){ .center = (vec3){.x = -2, .y = 0, .z = 4},
+    green = (sphere){ .center = (vec3){.x = -2.0, .y = 0.0, .z = 4.0},
         .radius = 1,
         .color = (rgb) {.red = 0, .green = 255, .blue = 0 }
     };
 
     // Build our list of spheres in the scene
+    sceneList.data = red;
     sphereList second;
     second.data = blue;
     sphereList third;
     third.data = green;
 
-    sceneList.data = red;
     sceneList.next = &second;
     second.next = &third;
     third.next = NULL;
