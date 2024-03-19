@@ -101,6 +101,10 @@ LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wP
     return 0;
 }
 
+/*
+ * getColor - Converts the color struct to a 32-bit int containing 8 bits of filler, the 8 red bits, the 8 green bits, then the 8
+ * blue bits, in that order.
+ */
 uint32_t getColor(rgb *c) {
     uint32_t compColor = 0;
     compColor += c->red;
@@ -172,11 +176,12 @@ sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
     return (sphereResult) { .firstT = t1, .secondT = t2 };
 }
 
-rgb* traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
+rgb *traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
     double closestT = DBL_MAX;
     sphere *closestSphere = NULL;
     for (sphereList *node = &sceneList; node != NULL; node = node->next) {
         sphereResult result = intersectRaySphere(origin, D, &node->data);
+
         if (result.firstT >= t_min && result.firstT < t_max && result.firstT < closestT) {
             closestT = result.firstT;
             closestSphere = &node->data;
@@ -199,7 +204,7 @@ void renderScene() {
     O.y = 0;
     O.z = 0;
     for (int x = -frame.width / 2; x < frame.width / 2; x++) {
-        for (int y = -frame.height / 2; y < frame.height / 2; y++) {
+        for (int y = -frame.height / 2; y < frame.height / 2 + 1; y++) {
             vec3 D;
             canvasToViewport(x, y, &D);
             rgb *c;
@@ -211,12 +216,12 @@ void renderScene() {
 
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
-    if (!AllocConsole()) {
+    if (!AllocConsole()) { // If the call fails return
         return -1;
     }
 
-    freopen_s((FILE **)stdout, "CONOUT$", "w", stdout);
-    freopen_s((FILE **)stderr, "CONOUT$", "w", stderr);
+    freopen_s((FILE **)stdout, "CONOUT$", "w", stdout); // Reattach stdout to the alloc'd console
+    freopen_s((FILE **)stderr, "CONOUT$", "w", stderr); // Reattach stderr to the alloc'd console
 
     const wchar_t windowClassName[] = L"Ray Tracer";
     static WNDCLASS windowClass = { 0 };
@@ -231,13 +236,13 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     bmi.bmiHeader.biCompression = BI_RGB;
     fdc = CreateCompatibleDC(0);
 
-    HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+    HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE,
         0, 0, 500, 500, NULL, NULL, hInstance, NULL);
     if (windowHandle == NULL) {
         return -1;
     }
 
-    red = (sphere){ .center = (vec3){.x = 0.0, .y = -1.0, .z = -3.0},
+    red = (sphere){ .center = (vec3){.x = 0.0, .y = -1.0, .z = 3.0},
     .radius = 1,
     .color = (rgb) {.red = 255, .green = 0, .blue = 0 }
     };
@@ -279,6 +284,6 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         InvalidateRect(windowHandle, NULL, FALSE);
         UpdateWindow(windowHandle);
     }
-
+    FreeConsole();
     return 0;
 }
