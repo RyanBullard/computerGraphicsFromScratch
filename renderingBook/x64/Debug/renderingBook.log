@@ -1,0 +1,11 @@
+﻿  main.c
+C:\Users\ryanb\source\repos\renderingBook\renderingBook\main.c(1,1): warning C4005: 'UNICODE': macro redefinition
+  C:\Users\ryanb\source\repos\renderingBook\renderingBook\main.c(1,1):
+  'UNICODE' previously declared on the command line
+  
+C:\Users\ryanb\source\repos\renderingBook\renderingBook\main.c(2,1): warning C4005: '_UNICODE': macro redefinition
+  C:\Users\ryanb\source\repos\renderingBook\renderingBook\main.c(2,1):
+  '_UNICODE' previously declared on the command line
+  
+MSVCRTD.lib(exe_main.obj) : error LNK2019: unresolved external symbol main referenced in function "int __cdecl invoke_main(void)" (?invoke_main@@YAHXZ)
+C:\Users\ryanb\source\repos\renderingBook\x64\Debug\renderingBook.exe : fatal error LNK1120: 1 unresolved externals

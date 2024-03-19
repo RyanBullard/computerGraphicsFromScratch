@@ -1,0 +1,9 @@
+﻿  rayTracer.c
+C:\Users\ryanb\source\repos\renderingBook\RayTracer\rayTracer.c(73,11): warning C4018: '>=': signed/unsigned mismatch
+C:\Users\ryanb\source\repos\renderingBook\RayTracer\rayTracer.c(73,31): warning C4018: '>=': signed/unsigned mismatch
+  Generating code
+  2 of 7 functions (28.6%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  RayTracer.vcxproj -> C:\Users\ryanb\source\repos\renderingBook\x64\Release\RayTracer.exe
