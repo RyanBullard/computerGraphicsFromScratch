@@ -78,6 +78,11 @@ typedef struct sphereResult {
     double secondT;
 } sphereResult;
 
+typedef struct intersectResult {
+    sphere *s;
+    double t;
+} intersectResult;
+
 static BITMAPINFO bmi;
 static HBITMAP frameBitmap = 0;
 static HDC fdc = 0;
@@ -87,7 +92,7 @@ rgb background;
 sphereList sceneList;
 light sceneLight;
 
-LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_QUIT:
     case WM_DESTROY: {
@@ -133,12 +138,12 @@ LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wP
  * getColor - Converts the color struct to a 32-bit int containing 8 bits of filler, the 8 red bits, the 8 green bits, then the 8
  * blue bits, in that order.
  */
-uint32_t getColor(rgb c) {
+static uint32_t getColor(rgb c) {
     uint32_t compColor = 0;
     compColor += c.red;
-    compColor = compColor << 8;
+    compColor <<= 8;
     compColor += c.green;
-    compColor = compColor << 8;
+    compColor <<= 8;
     compColor += c.blue;
     return compColor;
 }
@@ -147,7 +152,7 @@ uint32_t getColor(rgb c) {
  * putPixelRawVal - Puts a pixel of a specified color on the window, with the bottom left corner as the origin.
  * This function does check that the position is valid. If there is an issue, it prints the attempted value to stderr.
  */
-void putPixelRawVal(int32_t x, int32_t y, rgb c) {
+static void putPixelRawVal(int32_t x, int32_t y, rgb c) {
     if (x >= frame.width || y >= frame.height) {
         fprintf(stderr, "Pixel out of bounds! x: %d, y: %d\n", x, y);
         return;
@@ -159,7 +164,7 @@ void putPixelRawVal(int32_t x, int32_t y, rgb c) {
  * putPixel - Plots a pixel on the screen of a specified color using the center of the screen as the origin.
  * This function does check that the position is valid. If there is an issue, it prints the attempted value to stderr.
  */
-void putPixel(int32_t x, int32_t y, rgb c) {
+static void putPixel(int32_t x, int32_t y, rgb c) {
     int32_t offsetX = x + (frame.width / 2);
     int32_t offsetY = y + (frame.height / 2);
     if (offsetX > frame.width || offsetY > frame.height || offsetX < 0 || offsetY < 0) {
@@ -169,17 +174,17 @@ void putPixel(int32_t x, int32_t y, rgb c) {
     frame.pixels[offsetY * frame.width + offsetX] = getColor(c);
 }
 
-void canvasToViewport(int x, int y, vec3 *dest) {
+static void canvasToViewport(int x, int y, vec3 *dest) {
     dest->x = x * ((double) VIEWPORT_WIDTH / frame.width);
     dest->y = y * ((double) VIEWPORT_HEIGHT / frame.height);
     dest->z = (double)DISTANCE;
 }
 
-double dotProduct(vec3 vector1, vec3 vector2) {
+static double dotProduct(vec3 vector1, vec3 vector2) {
     return vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z;
 }
 
-vec3 vecSub(vec3 vector1, vec3 vector2) {
+static vec3 vecSub(vec3 vector1, vec3 vector2) {
     return (vec3) {
         .x = vector1.x - vector2.x,
         .y = vector1.y - vector2.y,
@@ -187,7 +192,7 @@ vec3 vecSub(vec3 vector1, vec3 vector2) {
     };
 }
 
-vec3 vecAdd(vec3 vector1, vec3 vector2) {
+static vec3 vecAdd(vec3 vector1, vec3 vector2) {
     return (vec3) {
         .x = vector1.x + vector2.x,
         .y = vector1.y + vector2.y,
@@ -195,7 +200,7 @@ vec3 vecAdd(vec3 vector1, vec3 vector2) {
     };
 }
 
-vec3 vecConstMul(double constant, vec3 *vector) {
+static vec3 vecConstMul(double constant, vec3 *vector) {
     return (vec3) {
         .x = constant * vector->x,
         .y = constant * vector->y,
@@ -203,11 +208,11 @@ vec3 vecConstMul(double constant, vec3 *vector) {
     };
 }
 
-double magnitude(vec3 vector) {
+static double magnitude(vec3 vector) {
     return sqrt((vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z));
 }
 
-vec3 normalize(vec3 vector) {
+static vec3 normalize(vec3 vector) {
     double mag = magnitude(vector);
     return (vec3) {
         .x = mag * vector.x,
@@ -216,7 +221,7 @@ vec3 normalize(vec3 vector) {
     };
 }
 
-rgb colorMul(rgb *color, double mul) {
+static rgb colorMul(rgb *color, double mul) {
     double red = color->red * mul;
     double green = color->green * mul;
     double blue = color->blue * mul;
@@ -242,7 +247,7 @@ rgb colorMul(rgb *color, double mul) {
     return (rgb) { .red = redComp, .blue = blueComp, .green = greenComp };
 }
 
-sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
+static sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
     uint32_t radius = s->radius;
     vec3 offsetO = vecSub(*origin, s->center);
 
@@ -260,44 +265,7 @@ sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
     return (sphereResult) { .firstT = t1, .secondT = t2 };
 }
 
-double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) {
-    double intensity = 0.0;
-    intensity += sceneLight.ambient.intensity;
-    for (dirLightList *dLightNode = sceneLight.dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
-        double nDotL = dotProduct(*normal, dLightNode->data.dir);
-        if (nDotL > 0) {
-            intensity += dLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(dLightNode->data.dir));
-        }
-
-        if (spec != 0) {
-            vec3 r = vecSub(vecConstMul(2 * nDotL, normal), dLightNode->data.dir);
-            double rDotV = dotProduct(r, v);
-            if (rDotV > 0) {
-                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
-            }
-        }
-    }
-
-    for (pointLightList *pLightNode = sceneLight.pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
-        vec3 pointNorm = vecSub(pLightNode->data.pos, *point);
-        double nDotL = dotProduct(*normal, pointNorm);
-        if (nDotL > 0) {
-            intensity += pLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(pointNorm));
-        }
-
-        if (spec != 0) {
-            vec3 r = vecSub(vecConstMul(2 * nDotL, normal), pointNorm);
-            double rDotV = dotProduct(r, v);
-            if (rDotV > 0) {
-                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
-            }
-        }
-    }
-
-    return intensity;
-}
-
-rgb traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
+static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, double t_max) {
     double closestT = DBL_MAX;
     sphere *closestSphere = NULL;
     for (sphereList *node = &sceneList; node != NULL; node = node->next) {
@@ -313,6 +281,66 @@ rgb traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
             closestSphere = &node->data;
         }
     }
+    return (intersectResult) { .s = closestSphere, .t = closestT };
+}
+
+static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) {
+    double intensity = 0.0;
+    intensity += sceneLight.ambient.intensity;
+    for (dirLightList *dLightNode = sceneLight.dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
+        double nDotL = dotProduct(*normal, dLightNode->data.dir);
+
+        intersectResult shadow = closestIntersection(point, &dLightNode->data.dir, 0.001, DBL_MAX);
+
+        if (shadow.s != NULL) {
+            continue;
+        }
+
+        if (nDotL > 0) {
+            intensity += dLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(dLightNode->data.dir));
+        }
+
+        if (spec != -1) {
+            vec3 r = vecSub(vecConstMul(2 * nDotL, normal), dLightNode->data.dir);
+            double rDotV = dotProduct(r, v);
+            if (rDotV > 0) {
+                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
+            }
+        }
+    }
+
+    for (pointLightList *pLightNode = sceneLight.pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
+        vec3 pointNorm = vecSub(pLightNode->data.pos, *point);
+        double nDotL = dotProduct(*normal, pointNorm);
+
+        intersectResult shadow = closestIntersection(point, &pointNorm, 0.001, 1.0);
+
+        if (shadow.s != NULL) {
+            continue;
+        }
+
+        if (nDotL > 0) {
+            intensity += pLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(pointNorm));
+        }
+
+        if (spec != -1) {
+            vec3 r = vecSub(vecConstMul(2 * nDotL, normal), pointNorm);
+            double rDotV = dotProduct(r, v);
+            if (rDotV > 0) {
+                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
+            }
+        }
+    }
+
+    return intensity;
+}
+
+static rgb traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
+    intersectResult res = closestIntersection(origin, D, t_min, t_max);
+
+    sphere *closestSphere = res.s;
+    double closestT = res.t;
+    
     if (closestSphere == NULL) {
         return background;
     }
@@ -322,8 +350,8 @@ rgb traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
     return colorMul(&closestSphere->color, computeLighting(&p, &normal, vecConstMul(-1, D), closestSphere->specular));
 }
 
-void renderScene() {
-    vec3 O;
+static void renderScene() {
+    vec3 O = (vec3){ 0 };
     O.x = 0;
     O.y = 0;
     O.z = 0;
@@ -344,8 +372,8 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         return -1;
     }
 
-    freopen_s((FILE **)stdout, "CONOUT$", "w", stdout); // Reattach stdout to the alloc'd console
-    freopen_s((FILE **)stderr, "CONOUT$", "w", stderr); // Reattach stderr to the alloc'd console
+    freopen_s((FILE **)stdout, "CONOUT$", "w", stdout); // Reattach stdout to the allocated console
+    freopen_s((FILE **)stderr, "CONOUT$", "w", stderr); // Reattach stderr to the allocated console
 
     const wchar_t windowClassName[] = L"Ray Tracer";
     static WNDCLASS windowClass = { 0 };
@@ -393,11 +421,11 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     };
 
     sceneList.data = red;
-    sphereList second;
+    sphereList second = (sphereList){ 0 };
     second.data = blue;
-    sphereList third;
+    sphereList third = (sphereList){ 0 };
     third.data = green;
-    sphereList fourth;
+    sphereList fourth = (sphereList){ 0 };
     fourth.data = yellow;
 
     sceneList.next = &second;

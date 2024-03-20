@@ -59,9 +59,9 @@ LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wP
 uint32_t getColor(uint8_t red, uint8_t green, uint8_t blue) {
     uint32_t color = 0;
     color += red;
-    color = color << 8;
+    color <<= 8;
     color += green;
-    color = color << 8;
+    color <<= 8;
     color += blue;
     return color;
 }
