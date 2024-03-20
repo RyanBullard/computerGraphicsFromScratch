@@ -175,8 +175,8 @@ void canvasToViewport(int x, int y, vec3 *dest) {
     dest->z = (double)DISTANCE;
 }
 
-double dotProduct(vec3 *vector1, vec3 *vector2) {
-    return vector1->x * vector2->x + vector1->y * vector2->y + vector1->z * vector2->z;
+double dotProduct(vec3 vector1, vec3 vector2) {
+    return vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z;
 }
 
 vec3 vecSub(vec3 vector1, vec3 vector2) {
@@ -203,16 +203,16 @@ vec3 vecConstMul(double constant, vec3 *vector) {
     };
 }
 
-double magnitude(vec3 *vector) {
-    return sqrt((vector->x * vector->x) + (vector->y * vector->y) + (vector->z * vector->z));
+double magnitude(vec3 vector) {
+    return sqrt((vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z));
 }
 
-vec3 normalize(vec3 *vector) {
+vec3 normalize(vec3 vector) {
     double mag = magnitude(vector);
     return (vec3) {
-        .x = mag * vector->x,
-        .y = mag * vector->y,
-        .z = mag * vector->z
+        .x = mag * vector.x,
+        .y = mag * vector.y,
+        .z = mag * vector.z
     };
 }
 
@@ -246,9 +246,9 @@ sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
     uint32_t radius = s->radius;
     vec3 offsetO = vecSub(*origin, s->center);
 
-    double a = dotProduct(direction, direction);
-    double b = 2 * dotProduct(&offsetO, direction);
-    double c = dotProduct(&offsetO, &offsetO) - (radius*radius);
+    double a = dotProduct(*direction, *direction);
+    double b = 2 * dotProduct(offsetO, *direction);
+    double c = dotProduct(offsetO, offsetO) - (radius*radius);
 
     double discriminant = (b * b) - (4 * a * c);
 
@@ -264,32 +264,32 @@ double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) {
     double intensity = 0.0;
     intensity += sceneLight.ambient.intensity;
     for (dirLightList *dLightNode = sceneLight.dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
-        double nDotL = dotProduct(normal, &dLightNode->data.dir);
+        double nDotL = dotProduct(*normal, dLightNode->data.dir);
         if (nDotL > 0) {
-            intensity += dLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&dLightNode->data.dir));
+            intensity += dLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(dLightNode->data.dir));
         }
 
         if (spec != 0) {
             vec3 r = vecSub(vecConstMul(2 * nDotL, normal), dLightNode->data.dir);
-            double rDotV = dotProduct(&r, &v);
+            double rDotV = dotProduct(r, v);
             if (rDotV > 0) {
-                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
+                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
             }
         }
     }
 
     for (pointLightList *pLightNode = sceneLight.pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
         vec3 pointNorm = vecSub(pLightNode->data.pos, *point);
-        double nDotL = dotProduct(normal, &pointNorm);
+        double nDotL = dotProduct(*normal, pointNorm);
         if (nDotL > 0) {
-            intensity += pLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&pointNorm));
+            intensity += pLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(pointNorm));
         }
 
         if (spec != 0) {
             vec3 r = vecSub(vecConstMul(2 * nDotL, normal), pointNorm);
-            double rDotV = dotProduct(&r, &v);
+            double rDotV = dotProduct(r, v);
             if (rDotV > 0) {
-                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
+                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
             }
         }
     }
@@ -318,7 +318,7 @@ rgb traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
     }
     vec3 p = vecAdd(*origin, vecConstMul(closestT, D));
     vec3 normal = vecSub(p, closestSphere->center);
-    normal = normalize(&normal);
+    normal = normalize(normal);
     return colorMul(&closestSphere->color, computeLighting(&p, &normal, vecConstMul(-1, D), closestSphere->specular));
 }
 
