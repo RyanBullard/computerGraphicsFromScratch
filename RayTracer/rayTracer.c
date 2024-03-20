@@ -7,8 +7,13 @@
 #include <float.h>
 #include <limits.h>
 
-#define VIEWPORT_WIDTH 1
-#define VIEWPORT_HEIGHT 1
+#include "color.h"
+#include "vec3.h"
+#include "light.h"
+#include "sphere.h"
+
+#define VIEWPORT_WIDTH 2
+#define VIEWPORT_HEIGHT 2
 #define DISTANCE 1
 
 static bool quit = false;
@@ -19,62 +24,6 @@ struct { // Represents the frame we are drawing to.
     uint32_t *pixels;
 } frame = { 0 };
 
-typedef struct vec3 { // Represents both a point in space, and a mathematical vector.
-    double x;
-    double y;
-    double z;
-} vec3;
-
-typedef struct rgb { // Stores color information in a more readable way compared to a uint32_t.
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-} rgb;
-
-typedef struct pointLight { // Represents light emitted from a singular point in the scene. Similar to a light bulb.
-    double intensity;
-    vec3 pos;
-} pointLight;
-
-typedef struct dirLight { // Represents a light coming from a certain direction. Similar to the sun.
-    double intensity;
-    vec3 dir;
-} dirLight;
-
-typedef struct sphere { // Represents one of the objects in the scene, a sphere.
-    vec3 center;
-    uint32_t radius;
-    rgb color;
-    uint32_t specular;
-    double reflectivity;
-} sphere;
-
-typedef struct sphereList { // Holds the list of all objects in the hard coded scene.
-    sphere data;
-    struct sphereList *next;
-} sphereList;
-
-typedef struct pointLightList { // Holds a list of all point lights placed in the scene.
-    pointLight data;
-    struct pointLightList *next;
-} pointLightList;
-
-typedef struct dirLightList { // Holds a list of all directional lights used in the scene.
-    dirLight data;
-    struct dirLightList *next;
-} dirLightList;
-
-typedef struct light { // Represents the overall lights in the scene.
-    double ambient;
-    dirLightList *dirList;
-    pointLightList *pointList;
-} light;
-
-typedef struct sphereResult { // Used to hold information when determining which sphere is closest to the camera.
-    double firstT;
-    double secondT;
-} sphereResult;
-
 typedef struct intersectResult { // Used to hold information about the sphere that may intersect a ray.
     sphere *s;
     double t;
@@ -84,7 +33,11 @@ static BITMAPINFO bmi; // The header for the bitmap that is drawn to the screen.
 static HBITMAP frameBitmap = NULL; // The pointer to the bitmap we draw.
 static HDC fdc = NULL; // Represents the device context of our frame.
 
-rgb background; // Holds our background color for the scene.
+static rgb background = { // Holds our background color for the scene.
+    .red = 0,
+    .green = 0,
+    .blue = 0
+}; 
 
 sphereList sceneList; // Global list of objects in the scene.
 light sceneLight; // Global light identifiers.
@@ -134,20 +87,6 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
     return 0;
 }
 
-/*
- * getColor - Converts the color struct to a 32-bit int containing 8 bits of filler, the 8 red bits, the 8 green bits, then the 8
- * blue bits, in that order. Used to set the appropriate pixel in the bitmap to a color.
- */
-static uint32_t getColor(rgb c) {
-    uint32_t compColor = 0;
-    compColor += c.red;
-    compColor <<= 8;
-    compColor += c.green;
-    compColor <<= 8;
-    compColor += c.blue;
-    return compColor;
-}
-
 /* 
  * putPixelRawVal - Puts a pixel of a specified color on the window, with the bottom left corner as the origin.
  * This function does check that the position is valid. If there is an issue, it prints the attempted value to stderr.
@@ -181,131 +120,6 @@ static void canvasToViewport(int x, int y, vec3 *dest) {
     dest->x = x * ((double) VIEWPORT_WIDTH / frame.width);
     dest->y = y * ((double) VIEWPORT_HEIGHT / frame.height);
     dest->z = (double)DISTANCE;
-}
-
-/*
- * dotProduct - Computes the dot product of two vectors. 
- */
-static double dotProduct(vec3 vector1, vec3 vector2) {
-    return vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z;
-}
-
-/*
- * vecSub - Subtracts two vectors component wise.
- */
-static vec3 vecSub(vec3 vector1, vec3 vector2) {
-    return (vec3) {
-        .x = vector1.x - vector2.x,
-        .y = vector1.y - vector2.y,
-        .z = vector1.z - vector2.z
-    };
-}
-
-/*
- * vecAdd - Adds to vectors component wise.
- */
-static vec3 vecAdd(vec3 vector1, vec3 vector2) {
-    return (vec3) {
-        .x = vector1.x + vector2.x,
-        .y = vector1.y + vector2.y,
-        .z = vector1.z + vector2.z
-    };
-}
-
-/*
- * vecConstMul - Multiplies each component of a vector by a constant.
- */
-static vec3 vecConstMul(double constant, vec3 vector) {
-    return (vec3) {
-        .x = constant * vector.x,
-        .y = constant * vector.y,
-        .z = constant * vector.z
-    };
-}
-
-/*
- * magnitude - Computes the magnitude of a 3D vector.
- */
-static double magnitude(vec3 vector) {
-    return sqrt((vector.x * vector.x) + (vector.y * vector.y) + (vector.z * vector.z));
-}
-
-/*
- * normalize - Returns the normalized vector of the passed in vector. That is - each component is divided
- * by the overall magnitude of the vector.
- */
-static vec3 normalize(vec3 vector) {
-    double mag = magnitude(vector);
-    return (vec3) {
-        .x = mag * vector.x,
-        .y = mag * vector.y,
-        .z = mag * vector.z
-    };
-}
-
-/*
- * reflectRay - Reflects a ray with respect to a normal.
- */
-static vec3 reflectRay(vec3 ray, vec3 normal) {
-    return vecSub(vecConstMul((2 * dotProduct(normal, ray)), normal), ray);
-}
-
-/*
- * colorMul - Multiplies a color by a constant. This function clamps the color down to 255.
- */
-static rgb colorMul(rgb *color, double mul) {
-    double red = color->red * mul;
-    double green = color->green * mul;
-    double blue = color->blue * mul;
-    
-    uint8_t redComp = 0;
-    if (red < 255) {
-        redComp = (uint8_t)red;
-    } else {
-        redComp = 255;
-    }
-    uint8_t greenComp = 0;
-    if (green < 255) {
-        greenComp = (uint8_t)green;
-    } else {
-        greenComp = 255;
-    }
-    uint8_t blueComp = 0;
-    if (blue < 255) {
-        blueComp = (uint8_t)blue;
-    } else {
-        blueComp = 255;
-    }
-    return (rgb) { .red = redComp, .blue = blueComp, .green = greenComp };
-}
-
-/*
- * colorMul - Multiplies a color by a constant. This function clamps the color down to 255.
- */
-static rgb colorAdd(rgb color, rgb color2) {
-    uint32_t red = color.red + color2.red;
-    uint32_t green = color.green + color2.green;
-    uint32_t blue = color.blue + color2.blue;
-
-    uint8_t redComp = 0;
-    if (red < 255) {
-        redComp = (uint8_t)red;
-    } else {
-        redComp = 255;
-    }
-    uint8_t greenComp = 0;
-    if (green < 255) {
-        greenComp = (uint8_t)green;
-    } else {
-        greenComp = 255;
-    }
-    uint8_t blueComp = 0;
-    if (blue < 255) {
-        blueComp = (uint8_t)blue;
-    } else {
-        blueComp = 255;
-    }
-    return (rgb) { .red = redComp, .blue = blueComp, .green = greenComp };
 }
 
 /*
@@ -423,7 +237,7 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
     vec3 normal = vecSub(p, closestSphere->center);
     normal = normalize(normal);
     vec3 view = vecConstMul(-1, *D);
-    rgb localColor = colorMul(&closestSphere->color, computeLighting(&p, &normal, view, closestSphere->specular));
+    rgb localColor = colorMul(closestSphere->color, computeLighting(&p, &normal, view, closestSphere->specular));
 
     double r = closestSphere->reflectivity;
     if (depth == 0 || r <= 0.0) {
@@ -434,7 +248,7 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
 
     rgb reflectedColor = traceRay(&p, &ray, 0.001, DBL_MAX, depth - 1);
 
-    return colorAdd(colorMul(&localColor, 1 - r), colorMul(&reflectedColor, r));
+    return colorAdd(colorMul(localColor, 1 - r), colorMul(reflectedColor, r)); // Blend the colors of the reflection and the actual color.
 }
 
 /*
@@ -483,7 +297,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     fdc = CreateCompatibleDC(0);
 
     HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE,
-        0, 0, 500, 500, NULL, NULL, hInstance, NULL);
+        0, 0, 1000, 1000, NULL, NULL, hInstance, NULL);
     if (windowHandle == NULL) {
         return -1;
     }
@@ -531,18 +345,38 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     third.next = &fourth;
     fourth.next = NULL;
 
-    background.red = 0;
-    background.green = 0;
-    background.blue = 0;
-
     //Build our list of lights in the scene
-    pointLight pLight = (pointLight){ .intensity = 0.6, .pos = (vec3){ .x=2.0, .y = 1.0, .z = 0.0} };
-    dirLight dLight = (dirLight){ .intensity = 0.2, .dir = (vec3){.x = 1.0, .y = 4.0, .z = 4.0} };
+    pointLight pLight = (pointLight){
+        .intensity = 0.6,
+        .pos = (vec3){
+            .x = 2.0,
+            .y = 1.0,
+            .z = 0.0
+        }
+    };
+    dirLight dLight = (dirLight){
+        .intensity = 0.2,
+        .dir = (vec3){
+            .x = 1.0,
+            .y = 4.0,
+            .z = 4.0
+        } 
+    };
 
-    dirLightList dList = (dirLightList){ .data = dLight, .next = NULL };
-    pointLightList pList = (pointLightList){ .data = pLight, .next = NULL };
+    dirLightList dList = (dirLightList){
+        .data = dLight,
+        .next = NULL
+    };
+    pointLightList pList = (pointLightList){
+        .data = pLight,
+        .next = NULL
+    };
 
-    sceneLight = (light){ .ambient = 0.2, .dirList = &dList, .pointList = &pList };
+    sceneLight = (light){
+        .ambient = 0.2,
+        .dirList = &dList,
+        .pointList = &pList
+    };
 
     while (!quit) {
         static MSG message = { 0 };

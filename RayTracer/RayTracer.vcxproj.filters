@@ -18,5 +18,25 @@
     <ClCompile Include="rayTracer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="color.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="vec3.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="color.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="vec3.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="light.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sphere.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
