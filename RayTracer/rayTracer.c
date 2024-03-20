@@ -31,16 +31,47 @@ typedef struct rgb {
     uint8_t blue;
 } rgb;
 
+typedef struct ambientLight {
+    double intensity;
+} ambientLight;
+
+typedef struct pointLight {
+    double intensity;
+    vec3 pos;
+} pointLight;
+
+typedef struct dirLight {
+    double intensity;
+    vec3 dir;
+} dirLight;
+
 typedef struct sphere {
     vec3 center;
     uint32_t radius;
     rgb color;
+    uint32_t specular;
 } sphere;
 
 typedef struct sphereList {
     sphere data;
     struct sphereList *next;
 } sphereList;
+
+typedef struct pointLightList {
+    pointLight data;
+    struct pointLightList *next;
+} pointLightList;
+
+typedef struct dirLightList {
+    dirLight data;
+    struct dirLightList *next;
+} dirLightList;
+
+typedef struct light {
+    ambientLight ambient;
+    dirLightList *dirList;
+    pointLightList *pointList;
+} light;
 
 typedef struct sphereResult {
     double firstT;
@@ -51,13 +82,10 @@ static BITMAPINFO bmi;
 static HBITMAP frameBitmap = 0;
 static HDC fdc = 0;
 
-sphere red;
-sphere blue;
-sphere green;
-
 rgb background;
 
 sphereList sceneList;
+light sceneLight;
 
 LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
@@ -105,13 +133,13 @@ LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wP
  * getColor - Converts the color struct to a 32-bit int containing 8 bits of filler, the 8 red bits, the 8 green bits, then the 8
  * blue bits, in that order.
  */
-uint32_t getColor(rgb *c) {
+uint32_t getColor(rgb c) {
     uint32_t compColor = 0;
-    compColor += c->red;
+    compColor += c.red;
     compColor = compColor << 8;
-    compColor += c->green;
+    compColor += c.green;
     compColor = compColor << 8;
-    compColor += c->blue;
+    compColor += c.blue;
     return compColor;
 }
 
@@ -119,7 +147,7 @@ uint32_t getColor(rgb *c) {
  * putPixelRawVal - Puts a pixel of a specified color on the window, with the bottom left corner as the origin.
  * This function does check that the position is valid. If there is an issue, it prints the attempted value to stderr.
  */
-void putPixelRawVal(int32_t x, int32_t y, rgb *c) {
+void putPixelRawVal(int32_t x, int32_t y, rgb c) {
     if (x >= frame.width || y >= frame.height) {
         fprintf(stderr, "Pixel out of bounds! x: %d, y: %d\n", x, y);
         return;
@@ -131,7 +159,7 @@ void putPixelRawVal(int32_t x, int32_t y, rgb *c) {
  * putPixel - Plots a pixel on the screen of a specified color using the center of the screen as the origin.
  * This function does check that the position is valid. If there is an issue, it prints the attempted value to stderr.
  */
-void putPixel(int32_t x, int32_t y, rgb *c) {
+void putPixel(int32_t x, int32_t y, rgb c) {
     int32_t offsetX = x + (frame.width / 2);
     int32_t offsetY = y + (frame.height / 2);
     if (offsetX > frame.width || offsetY > frame.height || offsetX < 0 || offsetY < 0) {
@@ -151,16 +179,72 @@ double dotProduct(vec3 *vector1, vec3 *vector2) {
     return vector1->x * vector2->x + vector1->y * vector2->y + vector1->z * vector2->z;
 }
 
-vec3 vecSub(vec3 *vector1, vec3 *vector2) {
-    return (vec3) { .x = vector1->x - vector2->x,
-        .y = vector1->y - vector2->y,
-        .z = vector1->z - vector2->z
+vec3 vecSub(vec3 vector1, vec3 vector2) {
+    return (vec3) {
+        .x = vector1.x - vector2.x,
+        .y = vector1.y - vector2.y,
+        .z = vector1.z - vector2.z
     };
+}
+
+vec3 vecAdd(vec3 vector1, vec3 vector2) {
+    return (vec3) {
+        .x = vector1.x + vector2.x,
+        .y = vector1.y + vector2.y,
+        .z = vector1.z + vector2.z
+    };
+}
+
+vec3 vecConstMul(double constant, vec3 *vector) {
+    return (vec3) {
+        .x = constant * vector->x,
+        .y = constant * vector->y,
+        .z = constant * vector->z
+    };
+}
+
+double magnitude(vec3 *vector) {
+    return sqrt((vector->x * vector->x) + (vector->y * vector->y) + (vector->z * vector->z));
+}
+
+vec3 normalize(vec3 *vector) {
+    double mag = magnitude(vector);
+    return (vec3) {
+        .x = mag * vector->x,
+        .y = mag * vector->y,
+        .z = mag * vector->z
+    };
+}
+
+rgb colorMul(rgb *color, double mul) {
+    double red = color->red * mul;
+    double green = color->green * mul;
+    double blue = color->blue * mul;
+    
+    uint8_t redComp = 0;
+    if (red < 255) {
+        redComp = (uint8_t)red;
+    } else {
+        redComp = 255;
+    }
+    uint8_t greenComp = 0;
+    if (green < 255) {
+        greenComp = (uint8_t)green;
+    } else {
+        greenComp = 255;
+    }
+    uint8_t blueComp = 0;
+    if (blue < 255) {
+        blueComp = (uint8_t)blue;
+    } else {
+        blueComp = 255;
+    }
+    return (rgb) { .red = redComp, .blue = blueComp, .green = greenComp };
 }
 
 sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
     uint32_t radius = s->radius;
-    vec3 offsetO = vecSub(origin, &s->center);
+    vec3 offsetO = vecSub(*origin, s->center);
 
     double a = dotProduct(direction, direction);
     double b = 2 * dotProduct(&offsetO, direction);
@@ -176,7 +260,44 @@ sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
     return (sphereResult) { .firstT = t1, .secondT = t2 };
 }
 
-rgb *traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
+double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) {
+    double intensity = 0.0;
+    intensity += sceneLight.ambient.intensity;
+    for (dirLightList *dLightNode = sceneLight.dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
+        double nDotL = dotProduct(normal, &dLightNode->data.dir);
+        if (nDotL > 0) {
+            intensity += dLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&dLightNode->data.dir));
+        }
+
+        if (spec != 0) {
+            vec3 r = vecSub(vecConstMul(2 * nDotL, normal), dLightNode->data.dir);
+            double rDotV = dotProduct(&r, &v);
+            if (rDotV > 0) {
+                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
+            }
+        }
+    }
+
+    for (pointLightList *pLightNode = sceneLight.pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
+        vec3 pointNorm = vecSub(pLightNode->data.pos, *point);
+        double nDotL = dotProduct(normal, &pointNorm);
+        if (nDotL > 0) {
+            intensity += pLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&pointNorm));
+        }
+
+        if (spec != 0) {
+            vec3 r = vecSub(vecConstMul(2 * nDotL, normal), pointNorm);
+            double rDotV = dotProduct(&r, &v);
+            if (rDotV > 0) {
+                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
+            }
+        }
+    }
+
+    return intensity;
+}
+
+rgb traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
     double closestT = DBL_MAX;
     sphere *closestSphere = NULL;
     for (sphereList *node = &sceneList; node != NULL; node = node->next) {
@@ -193,9 +314,12 @@ rgb *traceRay(vec3 *origin, vec3 *D, uint32_t t_min, uint32_t t_max) {
         }
     }
     if (closestSphere == NULL) {
-        return &background;
+        return background;
     }
-    return &closestSphere->color;
+    vec3 p = vecAdd(*origin, vecConstMul(closestT, D));
+    vec3 normal = vecSub(p, closestSphere->center);
+    normal = normalize(&normal);
+    return colorMul(&closestSphere->color, computeLighting(&p, &normal, vecConstMul(-1, D), closestSphere->specular));
 }
 
 void renderScene() {
@@ -207,7 +331,7 @@ void renderScene() {
         for (int y = -frame.height / 2; y < frame.height / 2 + 1; y++) {
             vec3 D;
             canvasToViewport(x, y, &D);
-            rgb *c;
+            rgb c;
             c = traceRay(&O, &D, DISTANCE, INT32_MAX);
             putPixel(x, y, c);
         }
@@ -242,36 +366,58 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         return -1;
     }
 
-    red = (sphere){ .center = (vec3){.x = 0.0, .y = -1.0, .z = 3.0},
-    .radius = 1,
-    .color = (rgb) {.red = 255, .green = 0, .blue = 0 }
-    };
-
-    blue = (sphere){ .center = (vec3){.x = 2.0, .y = 0.0, .z = 4.0},
-        .radius = 1,
-        .color = (rgb) {.red = 0, .green = 0, .blue = 255 }
-    };
-
-    green = (sphere){ .center = (vec3){.x = -2.0, .y = 0.0, .z = 4.0},
-        .radius = 1,
-        .color = (rgb) {.red = 0, .green = 255, .blue = 0 }
-    };
-
     // Build our list of spheres in the scene
+
+    sphere red = (sphere){ .center = (vec3){.x = 0.0, .y = -1.0, .z = 3.0},
+        .radius = 1,
+        .color = (rgb) {.red = 255, .green = 0, .blue = 0 },
+        .specular = 500
+    };
+
+    sphere blue = (sphere){ .center = (vec3){.x = 2.0, .y = 0.0, .z = 4.0},
+        .radius = 1,
+        .color = (rgb) {.red = 0, .green = 0, .blue = 255 },
+        .specular = 500
+    };
+
+    sphere green = (sphere){ .center = (vec3){.x = -2.0, .y = 0.0, .z = 4.0},
+        .radius = 1,
+        .color = (rgb) {.red = 0, .green = 255, .blue = 0 },
+        .specular = 10
+    };
+
+    sphere yellow = (sphere){ .center = (vec3){.x = 0.0, .y = -5001.0, .z = 0.0},
+        .radius = 5000,
+        .color = (rgb) {.red = 255, .green = 255, .blue = 0 },
+        .specular = 1000
+    };
+
     sceneList.data = red;
     sphereList second;
     second.data = blue;
     sphereList third;
     third.data = green;
+    sphereList fourth;
+    fourth.data = yellow;
 
     sceneList.next = &second;
     second.next = &third;
-    third.next = NULL;
+    third.next = &fourth;
+    fourth.next = NULL;
 
     background.red = 255;
     background.green = 255;
     background.blue = 255;
 
+    //Build our list of lights in the scene
+    ambientLight aLight = (ambientLight){ .intensity = 0.2 };
+    pointLight pLight = (pointLight){ .intensity = 0.6, .pos = (vec3){ .x=2.0, .y = 1.0, .z = 0.0} };
+    dirLight dLight = (dirLight){ .intensity = 0.2, .dir = (vec3){.x = 1.0, .y = 4.0, .z = 4.0} };
+
+    dirLightList dList = (dirLightList){ .data = dLight, .next = NULL };
+    pointLightList pList = (pointLightList){ .data = pLight, .next = NULL };
+
+    sceneLight = (light){ .ambient = aLight, .dirList = &dList, .pointList = &pList };
 
     while (!quit) {
         static MSG message = { 0 };
