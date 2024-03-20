@@ -66,3 +66,11 @@ vec3 normalize(vec3 vector) {
 vec3 reflectRay(vec3 ray, vec3 normal) {
     return vecSub(vecConstMul((2 * dotProduct(normal, ray)), normal), ray);
 }
+
+vec3 multiplyMV(double matrix[3][3], vec3 vector) {
+    return (vec3) {
+        .x = matrix[0][0] * vector.x + matrix[0][1] * vector.y + matrix[0][2] * vector.z,
+        .y = matrix[1][0] * vector.x + matrix[1][1] * vector.y + matrix[1][2] * vector.z,
+        .z = matrix[2][0] * vector.x + matrix[2][1] * vector.y + matrix[2][2] * vector.z
+    };
+}

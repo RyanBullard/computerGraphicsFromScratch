@@ -11,9 +11,10 @@
 #include "vec3.h"
 #include "light.h"
 #include "sphere.h"
+#include "missingKeys.h"
 
-#define VIEWPORT_WIDTH 2
-#define VIEWPORT_HEIGHT 2
+#define VIEWPORT_WIDTH 1
+#define VIEWPORT_HEIGHT 1
 #define DISTANCE 1
 
 static bool quit = false;
@@ -42,47 +43,89 @@ static rgb background = { // Holds our background color for the scene.
 sphereList sceneList; // Global list of objects in the scene.
 light sceneLight; // Global light identifiers.
 
+double xRot = 0.0;
+double yRot = 0.0;
+double zRot = 0.0;
+
+vec3 cameraPos = {
+    .x = 0,
+    .y = 0,
+    .z = 0
+};
+
 /*
  * WindowProcessMessage - Handler to process messages sent from windows to this program.
  */
 static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
-    case WM_QUIT:
-    case WM_DESTROY: {
-        quit = true;
-    } break;
+        case WM_QUIT:
+        case WM_DESTROY: {
+            quit = true;
+        } break;
 
-    case WM_PAINT: {
-        static PAINTSTRUCT paint;
-        static HDC dc;
-        dc = BeginPaint(windowHandle, &paint);
-        BitBlt(dc,
-            paint.rcPaint.left, paint.rcPaint.top,
-            paint.rcPaint.right - paint.rcPaint.left, paint.rcPaint.bottom - paint.rcPaint.top,
-            fdc,
-            paint.rcPaint.left, paint.rcPaint.top,
-            SRCCOPY);
-        EndPaint(windowHandle, &paint);
-    } break;
+        case WM_PAINT: {
+            static PAINTSTRUCT paint;
+            static HDC dc;
+            dc = BeginPaint(windowHandle, &paint);
+            BitBlt(dc,
+                paint.rcPaint.left, paint.rcPaint.top,
+                paint.rcPaint.right - paint.rcPaint.left, paint.rcPaint.bottom - paint.rcPaint.top,
+                fdc,
+                paint.rcPaint.left, paint.rcPaint.top,
+                SRCCOPY);
+            EndPaint(windowHandle, &paint);
+        } break;
 
-    case WM_SIZE: {
-        bmi.bmiHeader.biWidth = LOWORD(lParam);
-        bmi.bmiHeader.biHeight = HIWORD(lParam);
+        case WM_SIZE: {
+            bmi.bmiHeader.biWidth = LOWORD(lParam);
+            bmi.bmiHeader.biHeight = HIWORD(lParam);
 
-        if (frameBitmap) DeleteObject(frameBitmap);
-        frameBitmap = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, (void **)&frame.pixels, 0, 0);
-        if (frameBitmap == NULL) {
-            exit(-1);
+            if (frameBitmap) DeleteObject(frameBitmap);
+            frameBitmap = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, (void **)&frame.pixels, 0, 0);
+            if (frameBitmap == NULL) {
+                exit(-1);
+            }
+            SelectObject(fdc, frameBitmap);
+
+            frame.width = LOWORD(lParam);
+            frame.height = HIWORD(lParam);
+        } break;
+
+        case WM_KEYDOWN: {
+            switch (wParam) {
+                case VK_W: {
+                    cameraPos.z += 0.5;
+                } break;
+                case VK_S: {
+                    cameraPos.z -= 0.5;
+                } break;
+
+                case VK_A: {
+                    cameraPos.x -= 0.5;
+                } break;
+                case VK_D: {
+                    cameraPos.x += 0.5;
+                } break;
+
+                case VK_SPACE: {
+                    cameraPos.y += 0.5;
+                } break;
+                case VK_SHIFT: {
+                    cameraPos.y -= 1;
+                } break;
+
+                case VK_Q: {
+                    yRot -= 1;
+                } break;
+                case VK_E: {
+                    yRot += 1;
+                } break;
+            }
+        } break;
+
+        default: {
+            return DefWindowProc(windowHandle, message, wParam, lParam);
         }
-        SelectObject(fdc, frameBitmap);
-
-        frame.width = LOWORD(lParam);
-        frame.height = HIWORD(lParam);
-    } break;
-
-    default: {
-        return DefWindowProc(windowHandle, message, wParam, lParam);
-    }
     }
     return 0;
 }
@@ -117,9 +160,9 @@ static void putPixel(int32_t x, int32_t y, rgb c) {
  * canvasToViewport - Converts a screen space coordinate to a coordinate in the 3D view plane.
  */
 static void canvasToViewport(int x, int y, vec3 *dest) {
-    dest->x = x * ((double) VIEWPORT_WIDTH / frame.width);
-    dest->y = y * ((double) VIEWPORT_HEIGHT / frame.height);
-    dest->z = (double)DISTANCE;
+    dest->x = x * ((double) VIEWPORT_WIDTH / frame.width) + cameraPos.x;
+    dest->y = y * ((double) VIEWPORT_HEIGHT / frame.height) + cameraPos.y;
+    dest->z = (double)DISTANCE + cameraPos.z;
 }
 
 /*
@@ -251,21 +294,42 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
     return colorAdd(colorMul(localColor, 1 - r), colorMul(reflectedColor, r)); // Blend the colors of the reflection and the actual color.
 }
 
+void generateRotMatrix(double dest[3][3]) {
+
+    double sinAlpha = sin(zRot);
+    double cosAlpha = cos(zRot);
+    double sinBeta = sin(yRot);
+    double cosBeta = cos(yRot);
+    double sinGamma = sin(xRot);
+    double cosGamma = cos(xRot);
+
+    dest[0][0] = cosAlpha * cosBeta;
+    dest[0][1] = (cosAlpha * sinBeta * sinGamma) - (sinAlpha * cosGamma);
+    dest[0][2] = (cosAlpha * sinBeta * cosGamma) + (sinAlpha * sinGamma);
+
+    dest[1][0] = sinAlpha * cosBeta;
+    dest[1][1] = (sinAlpha * sinBeta * sinGamma) + (cosAlpha * cosGamma);
+    dest[1][2] = (sinAlpha * sinBeta * cosGamma) - (cosAlpha * sinGamma);
+
+    dest[2][0] = -sinBeta;
+    dest[2][1] = cosBeta * sinGamma;
+    dest[2][2] = cosBeta * cosGamma;
+}
+
 /*
  * renderScene - Does the needed setup, then calls the required functions to render the raytraced scene.
  */
 static void renderScene() {
     uint32_t recursionDepth = 3;
-    vec3 O = (vec3){ 0 };
-    O.x = 0;
-    O.y = 0;
-    O.z = 0;
+    double rotMatrix[3][3] = { 0 };
+    generateRotMatrix(rotMatrix);
     for (int x = -frame.width / 2; x < frame.width / 2; x++) {
         for (int y = -frame.height / 2; y < frame.height / 2 + 1; y++) {
             vec3 D;
             canvasToViewport(x, y, &D);
+            D = multiplyMV(rotMatrix, D);
             rgb c;
-            c = traceRay(&O, &D, DISTANCE, DBL_MAX, recursionDepth);
+            c = traceRay(&cameraPos, &D, DISTANCE, DBL_MAX, recursionDepth);
             putPixel(x, y, c);
         }
     }
@@ -297,7 +361,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     fdc = CreateCompatibleDC(0);
 
     HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE,
-        0, 0, 1000, 1000, NULL, NULL, hInstance, NULL);
+        0, 0, 500, 500, NULL, NULL, hInstance, NULL);
     if (windowHandle == NULL) {
         return -1;
     }
@@ -381,6 +445,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     while (!quit) {
         static MSG message = { 0 };
         while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&message);
             DispatchMessage(&message);
         }
 

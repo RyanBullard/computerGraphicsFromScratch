@@ -13,3 +13,4 @@ vec3 vecConstMul(double, vec3);
 vec3 vecAdd(vec3, vec3);
 vec3 vecSub(vec3, vec3);
 double dotProduct(vec3, vec3);
+vec3 multiplyMV(double[3][3], vec3);

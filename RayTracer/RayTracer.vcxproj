@@ -134,6 +134,7 @@
   <ItemGroup>
     <ClInclude Include="color.h" />
     <ClInclude Include="light.h" />
+    <ClInclude Include="missingKeys.h" />
     <ClInclude Include="sphere.h" />
     <ClInclude Include="vec3.h" />
   </ItemGroup>
