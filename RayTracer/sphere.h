@@ -13,7 +13,7 @@ typedef struct sphere { // Represents one of the objects in the scene, a sphere.
 } sphere;
 
 typedef struct sphereList { // Holds the list of all objects in the hard coded scene.
-    sphere data;
+    sphere *data;
     struct sphereList *next;
 } sphereList;
 

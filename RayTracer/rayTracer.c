@@ -16,6 +16,7 @@
 #define VIEWPORT_WIDTH 1
 #define VIEWPORT_HEIGHT 1
 #define DISTANCE 1
+# define M_PI 3.14159265358979323846
 
 static bool quit = false;
 
@@ -52,6 +53,46 @@ vec3 cameraPos = {
     .y = 0,
     .z = 0
 };
+
+vec3 x = {
+    .x = 1,
+    .y = 0,
+    .z = 0
+};
+
+vec3 y = {
+    .x = 0,
+    .y = 1,
+    .z = 0
+};
+
+vec3 z = {
+    .x = 0,
+    .y = 0,
+    .z = 1
+};
+
+void generateRotMatrix(double dest[3][3]) {
+
+    double sinAlpha = sin(zRot);
+    double cosAlpha = cos(zRot);
+    double sinBeta = sin(yRot);
+    double cosBeta = cos(yRot);
+    double sinGamma = sin(xRot);
+    double cosGamma = cos(xRot);
+
+    dest[0][0] = cosAlpha * cosBeta;
+    dest[0][1] = (cosAlpha * sinBeta * sinGamma) - (sinAlpha * cosGamma);
+    dest[0][2] = (cosAlpha * sinBeta * cosGamma) + (sinAlpha * sinGamma);
+
+    dest[1][0] = sinAlpha * cosBeta;
+    dest[1][1] = (sinAlpha * sinBeta * sinGamma) + (cosAlpha * cosGamma);
+    dest[1][2] = (sinAlpha * sinBeta * cosGamma) - (cosAlpha * sinGamma);
+
+    dest[2][0] = -sinBeta;
+    dest[2][1] = cosBeta * sinGamma;
+    dest[2][2] = cosBeta * cosGamma;
+}
 
 /*
  * WindowProcessMessage - Handler to process messages sent from windows to this program.
@@ -94,31 +135,51 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
         case WM_KEYDOWN: {
             switch (wParam) {
                 case VK_W: {
-                    cameraPos.z += 0.5;
+                    cameraPos.z += 0.1;
                 } break;
                 case VK_S: {
-                    cameraPos.z -= 0.5;
+                    cameraPos.z -= 0.1;
                 } break;
 
                 case VK_A: {
-                    cameraPos.x -= 0.5;
+                    cameraPos.x -= 0.1;
                 } break;
                 case VK_D: {
-                    cameraPos.x += 0.5;
+                    cameraPos.x += 0.1;
                 } break;
 
                 case VK_SPACE: {
-                    cameraPos.y += 0.5;
+                    cameraPos.y += 0.1;
                 } break;
                 case VK_SHIFT: {
-                    cameraPos.y -= 1;
+                    cameraPos.y -= 0.1;
                 } break;
 
                 case VK_Q: {
-                    yRot -= 1;
+                    yRot -= 0.01 * M_PI;
                 } break;
                 case VK_E: {
-                    yRot += 1;
+                    yRot += 0.01 * M_PI;
+                } break;
+
+                case VK_R: {
+                    cameraPos.x = 0;
+                    cameraPos.y = 0;
+                    cameraPos.z = 0;
+                    xRot = 0;
+                    yRot = 0;
+                    zRot = 0;
+                }break;
+
+                case VK_P: {
+                    yRot += M_PI;
+                } break;
+
+                case VK_UP: {
+                    xRot -= 0.05 * M_PI;
+                } break;
+                case VK_DOWN: {
+                    xRot += 0.05 * M_PI;
                 } break;
             }
         } break;
@@ -160,9 +221,9 @@ static void putPixel(int32_t x, int32_t y, rgb c) {
  * canvasToViewport - Converts a screen space coordinate to a coordinate in the 3D view plane.
  */
 static void canvasToViewport(int x, int y, vec3 *dest) {
-    dest->x = x * ((double) VIEWPORT_WIDTH / frame.width) + cameraPos.x;
-    dest->y = y * ((double) VIEWPORT_HEIGHT / frame.height) + cameraPos.y;
-    dest->z = (double)DISTANCE + cameraPos.z;
+    dest->x = x * ((double) VIEWPORT_WIDTH / frame.width);
+    dest->y = y * ((double) VIEWPORT_HEIGHT / frame.height);
+    dest->z = (double)DISTANCE;
 }
 
 /*
@@ -171,11 +232,11 @@ static void canvasToViewport(int x, int y, vec3 *dest) {
  */
 static sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
     uint32_t radius = s->radius;
-    vec3 offsetO = vecSub(*origin, s->center);
+    vec3 offsetO = vecSub(origin, &s->center);
 
-    double a = dotProduct(*direction, *direction);
-    double b = 2 * dotProduct(offsetO, *direction);
-    double c = dotProduct(offsetO, offsetO) - (radius*radius);
+    double a = dotProduct(direction, direction);
+    double b = 2 * dotProduct(&offsetO, direction);
+    double c = dotProduct(&offsetO, &offsetO) - (radius*radius);
 
     double discriminant = (b * b) - (4 * a * c);
 
@@ -195,16 +256,16 @@ static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, 
     double closestT = DBL_MAX;
     sphere *closestSphere = NULL;
     for (sphereList *node = &sceneList; node != NULL; node = node->next) {
-        sphereResult result = intersectRaySphere(origin, D, &node->data);
+        sphereResult result = intersectRaySphere(origin, D, node->data);
 
-        if (result.firstT >= t_min && result.firstT < t_max && result.firstT < closestT) {
+        if (result.firstT > t_min && result.firstT < t_max && result.firstT < closestT) {
             closestT = result.firstT;
-            closestSphere = &node->data;
+            closestSphere = node->data;
         }
 
-        if (result.secondT >= t_min && result.secondT < t_max && result.secondT < closestT) {
+        if (result.secondT > t_min && result.secondT < t_max && result.secondT < closestT) {
             closestT = result.secondT;
-            closestSphere = &node->data;
+            closestSphere = node->data;
         }
     }
     return (intersectResult) { .s = closestSphere, .t = closestT };
@@ -217,8 +278,7 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
     double intensity = 0.0;
     intensity += sceneLight.ambient;
     for (dirLightList *dLightNode = sceneLight.dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
-        double nDotL = dotProduct(*normal, dLightNode->data.dir);
-
+        double nDotL = dotProduct(normal, &dLightNode->data.dir);
         intersectResult shadow = closestIntersection(point, &dLightNode->data.dir, 0.001, DBL_MAX);
 
         if (shadow.s != NULL) {
@@ -226,21 +286,21 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
         }
 
         if (nDotL > 0) {
-            intensity += dLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(dLightNode->data.dir));
+            intensity += dLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&dLightNode->data.dir));
         }
 
         if (spec != -1) {
-            vec3 r = reflectRay(dLightNode->data.dir, *normal);
-            double rDotV = dotProduct(r, v);
+            vec3 r = reflectRay(&dLightNode->data.dir, normal);
+            double rDotV = dotProduct(&r, &v);
             if (rDotV > 0) {
-                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
+                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
             }
         }
     }
 
     for (pointLightList *pLightNode = sceneLight.pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
-        vec3 pointNorm = vecSub(pLightNode->data.pos, *point);
-        double nDotL = dotProduct(*normal, pointNorm);
+        vec3 pointNorm = vecSub(&pLightNode->data.pos, point);
+        double nDotL = dotProduct(normal, &pointNorm);
 
         intersectResult shadow = closestIntersection(point, &pointNorm, 0.001, 1.0);
 
@@ -249,14 +309,14 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
         }
 
         if (nDotL > 0) {
-            intensity += pLightNode->data.intensity * nDotL / (magnitude(*normal) * magnitude(pointNorm));
+            intensity += pLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&pointNorm));
         }
 
         if (spec != -1) {
-            vec3 r = reflectRay(pointNorm, *normal);
-            double rDotV = dotProduct(r, v);
+            vec3 r = reflectRay(&pointNorm, normal);
+            double rDotV = dotProduct(&r, &v);
             if (rDotV > 0) {
-                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(r) * magnitude(v)), spec);
+                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
             }
         }
     }
@@ -276,10 +336,11 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
     if (closestSphere == NULL) {
         return background;
     }
-    vec3 p = vecAdd(*origin, vecConstMul(closestT, *D));
-    vec3 normal = vecSub(p, closestSphere->center);
-    normal = normalize(normal);
-    vec3 view = vecConstMul(-1, *D);
+    vec3 tD = vecConstMul(closestT, D);
+    vec3 p = vecAdd(origin, &tD);
+    vec3 normal = vecSub(&p, &closestSphere->center);
+    normal = normalize(&normal);
+    vec3 view = vecConstMul(-1, D);
     rgb localColor = colorMul(closestSphere->color, computeLighting(&p, &normal, view, closestSphere->specular));
 
     double r = closestSphere->reflectivity;
@@ -287,33 +348,11 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
         return localColor;
     }
 
-    vec3 ray = reflectRay(view, normal); // Get the ray we are looking out of from the surface of the object
+    vec3 ray = reflectRay(&view, &normal); // Get the ray we are looking out of from the surface of the object
 
     rgb reflectedColor = traceRay(&p, &ray, 0.001, DBL_MAX, depth - 1);
 
     return colorAdd(colorMul(localColor, 1 - r), colorMul(reflectedColor, r)); // Blend the colors of the reflection and the actual color.
-}
-
-void generateRotMatrix(double dest[3][3]) {
-
-    double sinAlpha = sin(zRot);
-    double cosAlpha = cos(zRot);
-    double sinBeta = sin(yRot);
-    double cosBeta = cos(yRot);
-    double sinGamma = sin(xRot);
-    double cosGamma = cos(xRot);
-
-    dest[0][0] = cosAlpha * cosBeta;
-    dest[0][1] = (cosAlpha * sinBeta * sinGamma) - (sinAlpha * cosGamma);
-    dest[0][2] = (cosAlpha * sinBeta * cosGamma) + (sinAlpha * sinGamma);
-
-    dest[1][0] = sinAlpha * cosBeta;
-    dest[1][1] = (sinAlpha * sinBeta * sinGamma) + (cosAlpha * cosGamma);
-    dest[1][2] = (sinAlpha * sinBeta * cosGamma) - (cosAlpha * sinGamma);
-
-    dest[2][0] = -sinBeta;
-    dest[2][1] = cosBeta * sinGamma;
-    dest[2][2] = cosBeta * cosGamma;
 }
 
 /*
@@ -327,9 +366,8 @@ static void renderScene() {
         for (int y = -frame.height / 2; y < frame.height / 2 + 1; y++) {
             vec3 D;
             canvasToViewport(x, y, &D);
-            D = multiplyMV(rotMatrix, D);
-            rgb c;
-            c = traceRay(&cameraPos, &D, DISTANCE, DBL_MAX, recursionDepth);
+            D = multiplyMV(rotMatrix, &D);
+            rgb c = traceRay(&cameraPos, &D, DISTANCE, DBL_MAX, recursionDepth);
             putPixel(x, y, c);
         }
     }
@@ -339,13 +377,6 @@ static void renderScene() {
  * WinMain - The main function of a win32 program. Sets up the graphical scene then begins the rendering process.
  */
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
-
-    if (!AllocConsole()) { // If the call fails return
-        return -1;
-    }
-
-    freopen_s((FILE **)stdout, "CONOUT$", "w", stdout); // Reattach stdout to the allocated console
-    freopen_s((FILE **)stderr, "CONOUT$", "w", stderr); // Reattach stderr to the allocated console
 
     const wchar_t windowClassName[] = L"Ray Tracer";
     static WNDCLASS windowClass = { 0 };
@@ -361,7 +392,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     fdc = CreateCompatibleDC(0);
 
     HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE,
-        0, 0, 500, 500, NULL, NULL, hInstance, NULL);
+        0, 0, 1000, 1000, NULL, NULL, hInstance, NULL);
     if (windowHandle == NULL) {
         return -1;
     }
@@ -396,13 +427,13 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         .reflectivity = 0.5
     };
 
-    sceneList.data = red;
+    sceneList.data = &red;
     sphereList second = (sphereList){ 0 };
-    second.data = blue;
+    second.data = &blue;
     sphereList third = (sphereList){ 0 };
-    third.data = green;
+    third.data = &green;
     sphereList fourth = (sphereList){ 0 };
-    fourth.data = yellow;
+    fourth.data = &yellow;
 
     sceneList.next = &second;
     second.next = &third;
@@ -454,6 +485,5 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         InvalidateRect(windowHandle, NULL, FALSE);
         UpdateWindow(windowHandle);
     }
-    FreeConsole();
     return 0;
 }
