@@ -6,6 +6,7 @@
 #include <math.h>
 #include <float.h>
 #include <limits.h>
+#include <time.h>
 
 #include "color.h"
 #include "vec3.h"
@@ -18,6 +19,7 @@
 #define DISTANCE 1
 #define M_PI 3.14159265358979323846
 #define M_2PI 6.2831853071795865
+#define FRAMESPERSECOND 60
 
 static bool quit = false;
 
@@ -83,6 +85,14 @@ camInfo camera = {
     }
 };
 
+double deltaTime = 1000000 / FRAMESPERSECOND;
+double lowLimit = 1000000 / FRAMESPERSECOND;
+
+LARGE_INTEGER frequency;
+LARGE_INTEGER t1, t2;
+
+struct timespec start, end;
+
 /*
  * generateRotationMatrix - Generates the 3D rotation matrix corresponding to the current roll, yaw, and pitch of the camera.
  */
@@ -111,7 +121,7 @@ static void generateRotMatrix(double dest[3][3]) {
 /*
  * normalizeRotation - Ensures the rotation of the camera remains in the bounds [0, 2Pi].
  */
-void normalizeRotation() {
+static void normalizeRotation() {
     if (camera.xRot > M_2PI) {
         camera.xRot -= M_2PI;
     }
@@ -164,33 +174,37 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
         } break;
 
         case WM_KEYDOWN: {
-            switch (wParam) {
-                case VK_W: {
-                    camera.cameraPos.z += 0.1;
-                } break;
-                case VK_S: {
-                    camera.cameraPos.z -= 0.1;
-                } break;
 
-                case VK_A: {
-                    camera.cameraPos.x -= 0.1;
-                } break;
-                case VK_D: {
-                    camera.cameraPos.x += 0.1;
-                } break;
+            if (GetAsyncKeyState(VK_W) < 0) { // These keys can all be held down at once
+                camera.cameraPos.z += 5 * deltaTime;
+            }
 
-                case VK_SPACE: {
-                    camera.cameraPos.y += 0.1;
-                } break;
-                case VK_SHIFT: {
-                    camera.cameraPos.y -= 0.1;
-                } break;
+            if (GetAsyncKeyState(VK_S) < 0) {
+                camera.cameraPos.z -= 5 * deltaTime;
+            }
 
+            if (GetAsyncKeyState(VK_A) < 0) {
+                camera.cameraPos.x -= 5 * deltaTime;
+            }
+
+            if (GetAsyncKeyState(VK_D) < 0) {
+                camera.cameraPos.x += 5 * deltaTime;
+            }
+
+            if (GetAsyncKeyState(VK_SPACE) < 0) {
+                camera.cameraPos.y += 5 * deltaTime;
+            }
+
+            if (GetAsyncKeyState(VK_SHIFT) < 0) {
+                camera.cameraPos.y -= 5 * deltaTime;
+            }
+
+            switch(wParam) { // Only allow one of these at once
                 case VK_Q: {
-                    camera.yRot -= 0.01 * M_PI;
+                    camera.yRot -= M_2PI * deltaTime;
                 } break;
                 case VK_E: {
-                    camera.yRot += 0.01 * M_PI;
+                    camera.yRot += M_2PI * deltaTime;
                 } break;
 
                 case VK_R: {
@@ -203,21 +217,21 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
                 }break;
 
                 case VK_P: {
-                    camera.yRot += M_PI;
+                    camera.yRot += M_2PI * deltaTime;
                 } break;
 
                 case VK_UP: {
-                    camera.xRot -= 0.05 * M_PI;
+                    camera.xRot -= M_2PI * deltaTime;
                 } break;
                 case VK_DOWN: {
-                    camera.xRot += 0.05 * M_PI;
+                    camera.xRot += M_2PI * deltaTime;
                 } break;
 
                 case VK_RIGHT: {
-                    camera.zRot += 0.05 * M_PI;
+                    camera.zRot += M_2PI * deltaTime;
                 } break;
                 case VK_LEFT: {
-                    camera.zRot -= 0.05 * M_PI;
+                    camera.zRot -= M_2PI * deltaTime;
                 } break;
             }
             normalizeRotation();
@@ -398,6 +412,11 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
  * renderScene - Does the needed setup, then calls the required functions to render the raytraced scene.
  */
 static void renderScene() {
+
+    QueryPerformanceFrequency(&frequency);
+
+    QueryPerformanceCounter(&t1);
+
     uint32_t recursionDepth = 3;
     double rotMatrix[3][3] = { 0 };
     generateRotMatrix(rotMatrix);
@@ -410,6 +429,10 @@ static void renderScene() {
             putPixel(x, y, c);
         }
     }
+
+    QueryPerformanceCounter(&t2);
+
+    deltaTime = (double)(t2.QuadPart - t1.QuadPart) / frequency.QuadPart;
 }
 
 /*
