@@ -129,7 +129,6 @@
   <ItemGroup>
     <ClCompile Include="color.c" />
     <ClCompile Include="rayTracer.c" />
-    <ClCompile Include="vec3.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="color.h" />

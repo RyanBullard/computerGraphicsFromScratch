@@ -16,7 +16,8 @@
 #define VIEWPORT_WIDTH 1
 #define VIEWPORT_HEIGHT 1
 #define DISTANCE 1
-# define M_PI 3.14159265358979323846
+#define M_PI 3.14159265358979323846
+#define M_2PI 6.2831853071795865
 
 static bool quit = false;
 
@@ -31,6 +32,14 @@ typedef struct intersectResult { // Used to hold information about the sphere th
     double t;
 } intersectResult;
 
+typedef struct camInfo {
+    double xRot;
+    double yRot;
+    double zRot;
+
+    vec3 cameraPos;
+} camInfo;
+
 static BITMAPINFO bmi; // The header for the bitmap that is drawn to the screen.
 static HBITMAP frameBitmap = NULL; // The pointer to the bitmap we draw.
 static HDC fdc = NULL; // Represents the device context of our frame.
@@ -44,42 +53,47 @@ static rgb background = { // Holds our background color for the scene.
 sphereList sceneList; // Global list of objects in the scene.
 light sceneLight; // Global light identifiers.
 
-double xRot = 0.0;
-double yRot = 0.0;
-double zRot = 0.0;
-
-vec3 cameraPos = {
-    .x = 0,
-    .y = 0,
-    .z = 0
-};
-
-vec3 x = {
+vec3 x = { // The x unit vector in 3 space.
     .x = 1,
     .y = 0,
     .z = 0
 };
 
-vec3 y = {
+vec3 y = { // The y unit vector in 3 space.
     .x = 0,
     .y = 1,
     .z = 0
 };
 
-vec3 z = {
+vec3 z = { // The z unit vector in 3 space.
     .x = 0,
     .y = 0,
     .z = 1
 };
 
-void generateRotMatrix(double dest[3][3]) {
+camInfo camera = {
+    .xRot = 0.0,
+    .yRot = 0.0,
+    .zRot = 0.0,
 
-    double sinAlpha = sin(zRot);
-    double cosAlpha = cos(zRot);
-    double sinBeta = sin(yRot);
-    double cosBeta = cos(yRot);
-    double sinGamma = sin(xRot);
-    double cosGamma = cos(xRot);
+    .cameraPos = {
+        .x = 0.0,
+        .y = 0.0,
+        .z = 0.0
+    }
+};
+
+/*
+ * generateRotationMatrix - Generates the 3D rotation matrix corresponding to the current roll, yaw, and pitch of the camera.
+ */
+static void generateRotMatrix(double dest[3][3]) {
+
+    double sinAlpha = sin(camera.zRot);
+    double cosAlpha = cos(camera.zRot);
+    double sinBeta = sin(camera.yRot);
+    double cosBeta = cos(camera.yRot);
+    double sinGamma = sin(camera.xRot);
+    double cosGamma = cos(camera.xRot);
 
     dest[0][0] = cosAlpha * cosBeta;
     dest[0][1] = (cosAlpha * sinBeta * sinGamma) - (sinAlpha * cosGamma);
@@ -92,6 +106,23 @@ void generateRotMatrix(double dest[3][3]) {
     dest[2][0] = -sinBeta;
     dest[2][1] = cosBeta * sinGamma;
     dest[2][2] = cosBeta * cosGamma;
+}
+
+/*
+ * normalizeRotation - Ensures the rotation of the camera remains in the bounds [0, 2Pi].
+ */
+void normalizeRotation() {
+    if (camera.xRot > M_2PI) {
+        camera.xRot -= M_2PI;
+    }
+
+    if (camera.yRot > M_2PI) {
+        camera.yRot -= M_2PI;
+    }
+
+    if (camera.zRot > M_2PI) {
+        camera.zRot -= M_2PI;
+    }
 }
 
 /*
@@ -135,53 +166,61 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
         case WM_KEYDOWN: {
             switch (wParam) {
                 case VK_W: {
-                    cameraPos.z += 0.1;
+                    camera.cameraPos.z += 0.1;
                 } break;
                 case VK_S: {
-                    cameraPos.z -= 0.1;
+                    camera.cameraPos.z -= 0.1;
                 } break;
 
                 case VK_A: {
-                    cameraPos.x -= 0.1;
+                    camera.cameraPos.x -= 0.1;
                 } break;
                 case VK_D: {
-                    cameraPos.x += 0.1;
+                    camera.cameraPos.x += 0.1;
                 } break;
 
                 case VK_SPACE: {
-                    cameraPos.y += 0.1;
+                    camera.cameraPos.y += 0.1;
                 } break;
                 case VK_SHIFT: {
-                    cameraPos.y -= 0.1;
+                    camera.cameraPos.y -= 0.1;
                 } break;
 
                 case VK_Q: {
-                    yRot -= 0.01 * M_PI;
+                    camera.yRot -= 0.01 * M_PI;
                 } break;
                 case VK_E: {
-                    yRot += 0.01 * M_PI;
+                    camera.yRot += 0.01 * M_PI;
                 } break;
 
                 case VK_R: {
-                    cameraPos.x = 0;
-                    cameraPos.y = 0;
-                    cameraPos.z = 0;
-                    xRot = 0;
-                    yRot = 0;
-                    zRot = 0;
+                    camera.cameraPos.x = 0;
+                    camera.cameraPos.y = 0;
+                    camera.cameraPos.z = 0;
+                    camera.xRot = 0;
+                    camera.yRot = 0;
+                    camera.zRot = 0;
                 }break;
 
                 case VK_P: {
-                    yRot += M_PI;
+                    camera.yRot += M_PI;
                 } break;
 
                 case VK_UP: {
-                    xRot -= 0.05 * M_PI;
+                    camera.xRot -= 0.05 * M_PI;
                 } break;
                 case VK_DOWN: {
-                    xRot += 0.05 * M_PI;
+                    camera.xRot += 0.05 * M_PI;
+                } break;
+
+                case VK_RIGHT: {
+                    camera.zRot += 0.05 * M_PI;
+                } break;
+                case VK_LEFT: {
+                    camera.zRot -= 0.05 * M_PI;
                 } break;
             }
+            normalizeRotation();
         } break;
 
         default: {
@@ -367,7 +406,7 @@ static void renderScene() {
             vec3 D;
             canvasToViewport(x, y, &D);
             D = multiplyMV(rotMatrix, &D);
-            rgb c = traceRay(&cameraPos, &D, DISTANCE, DBL_MAX, recursionDepth);
+            rgb c = traceRay(&camera.cameraPos, &D, DISTANCE, DBL_MAX, recursionDepth);
             putPixel(x, y, c);
         }
     }
@@ -392,7 +431,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     fdc = CreateCompatibleDC(0);
 
     HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE,
-        0, 0, 1000, 1000, NULL, NULL, hInstance, NULL);
+        0, 0, 500, 500, NULL, NULL, hInstance, NULL);
     if (windowHandle == NULL) {
         return -1;
     }

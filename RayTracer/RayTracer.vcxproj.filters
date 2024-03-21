@@ -21,9 +21,6 @@
     <ClCompile Include="color.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="vec3.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="color.h">
