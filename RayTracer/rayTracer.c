@@ -86,12 +86,9 @@ camInfo camera = {
 };
 
 double deltaTime = 1000000 / FRAMESPERSECOND;
-double lowLimit = 1000000 / FRAMESPERSECOND;
 
 LARGE_INTEGER frequency;
 LARGE_INTEGER t1, t2;
-
-struct timespec start, end;
 
 /*
  * generateRotationMatrix - Generates the 3D rotation matrix corresponding to the current roll, yaw, and pitch of the camera.
@@ -175,24 +172,38 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
 
         case WM_KEYDOWN: {
 
+            double rot[3][3];
+
             if (GetAsyncKeyState(VK_W) < 0) { // These keys can all be held down at once
-                camera.cameraPos.z += 5 * deltaTime;
+                generateRotMatrix(rot);
+                vec3 movement = multiplyMV(rot, &z);
+                movement = vecConstMul(5 * deltaTime, &movement);
+                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
             }
 
             if (GetAsyncKeyState(VK_S) < 0) {
-                camera.cameraPos.z -= 5 * deltaTime;
+                generateRotMatrix(rot);
+                vec3 movement = multiplyMV(rot, &z);
+                movement = vecConstMul(-5 * deltaTime, &movement);
+                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
             }
 
             if (GetAsyncKeyState(VK_A) < 0) {
-                camera.cameraPos.x -= 5 * deltaTime;
+                generateRotMatrix(rot);
+                vec3 movement = multiplyMV(rot, &x);
+                movement = vecConstMul(-5 * deltaTime, &movement);
+                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
             }
 
             if (GetAsyncKeyState(VK_D) < 0) {
-                camera.cameraPos.x += 5 * deltaTime;
+                generateRotMatrix(rot);
+                vec3 movement = multiplyMV(rot, &x);
+                movement = vecConstMul(5 * deltaTime, &movement);
+                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
             }
 
             if (GetAsyncKeyState(VK_SPACE) < 0) {
-                camera.cameraPos.y += 5 * deltaTime;
+                camera.cameraPos.y += 5 * deltaTime; // These will always be relative to flat y axis to not lose orientation.
             }
 
             if (GetAsyncKeyState(VK_SHIFT) < 0) {
@@ -216,8 +227,14 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
                     camera.zRot = 0;
                 }break;
 
+                case VK_T: {
+                    camera.xRot = 0;
+                    camera.yRot = 0;
+                    camera.zRot = 0;
+                }break;
+
                 case VK_P: {
-                    camera.yRot += M_2PI * deltaTime;
+                    camera.yRot += M_PI;
                 } break;
 
                 case VK_UP: {
@@ -283,13 +300,13 @@ static void canvasToViewport(int x, int y, vec3 *dest) {
  * intersectRaySphere - This function finds the closest sphere that intersects a given ray.
  * A result of DBL_MAX means that no sphere intersects this ray at any point.
  */
-static sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s) {
-    uint32_t radius = s->radius;
+static sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s, double dDotD) {
+    uint32_t radiusSquare = s->rSquare;
     vec3 offsetO = vecSub(origin, &s->center);
 
-    double a = dotProduct(direction, direction);
+    double a = dDotD;
     double b = 2 * dotProduct(&offsetO, direction);
-    double c = dotProduct(&offsetO, &offsetO) - (radius*radius);
+    double c = dotProduct(&offsetO, &offsetO) - radiusSquare;
 
     double discriminant = (b * b) - (4 * a * c);
 
@@ -305,11 +322,11 @@ static sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s)
  * closestIntersection - Finds the closest sphere to a point that intersects a given vector. If the .s field of the
  * returned intersectResult struct is NULL, then no sphere intersects this vector.
  */
-static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, double t_max) {
+static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, double dDotD) {
     double closestT = DBL_MAX;
     sphere *closestSphere = NULL;
     for (sphereList *node = &sceneList; node != NULL; node = node->next) {
-        sphereResult result = intersectRaySphere(origin, D, node->data);
+        sphereResult result = intersectRaySphere(origin, D, node->data, dDotD);
 
         if (result.firstT > t_min && result.firstT < t_max && result.firstT < closestT) {
             closestT = result.firstT;
@@ -325,6 +342,25 @@ static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, 
 }
 
 /*
+ * closestIntersection - Finds the closest sphere to a point that intersects a given vector. If the .s field of the
+ * returned intersectResult struct is NULL, then no sphere intersects this vector.
+ */
+static bool anyIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, double dDotD) {
+    for (sphereList *node = &sceneList; node != NULL; node = node->next) {
+        sphereResult result = intersectRaySphere(origin, D, node->data, dDotD);
+
+        if (result.firstT > t_min && result.firstT < t_max) {
+            return true;
+        }
+
+        if (result.secondT > t_min && result.secondT < t_max) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
  * computeLighting - Computes the intensity of lighting at a certain point in the scene.
  */
 static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) {
@@ -332,7 +368,8 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
     intensity += sceneLight.ambient;
     for (dirLightList *dLightNode = sceneLight.dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
         double nDotL = dotProduct(normal, &dLightNode->data.dir);
-        intersectResult shadow = closestIntersection(point, &dLightNode->data.dir, 0.001, DBL_MAX);
+        intersectResult shadow = closestIntersection(point, &dLightNode->data.dir, 0.001, DBL_MAX,
+            dotProduct(&dLightNode->data.dir, &dLightNode->data.dir));
 
         if (shadow.s != NULL) {
             continue;
@@ -355,9 +392,7 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
         vec3 pointNorm = vecSub(&pLightNode->data.pos, point);
         double nDotL = dotProduct(normal, &pointNorm);
 
-        intersectResult shadow = closestIntersection(point, &pointNorm, 0.001, 1.0);
-
-        if (shadow.s != NULL) {
+        if (anyIntersection(point, &pointNorm, 0.001, 1.0, dotProduct(&pointNorm, &pointNorm))) {
             continue;
         }
 
@@ -381,7 +416,10 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
  * traceRay - Follows a ray from the view plane into the scene, and finds the color that needs to be plotted.
  */
 static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t depth) {
-    intersectResult res = closestIntersection(origin, D, t_min, t_max);
+
+    double dDotD = dotProduct(D, D);
+
+    intersectResult res = closestIntersection(origin, D, t_min, t_max, dDotD);
 
     sphere *closestSphere = res.s;
     double closestT = res.t;
@@ -412,11 +450,6 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
  * renderScene - Does the needed setup, then calls the required functions to render the raytraced scene.
  */
 static void renderScene() {
-
-    QueryPerformanceFrequency(&frequency);
-
-    QueryPerformanceCounter(&t1);
-
     uint32_t recursionDepth = 3;
     double rotMatrix[3][3] = { 0 };
     generateRotMatrix(rotMatrix);
@@ -429,10 +462,6 @@ static void renderScene() {
             putPixel(x, y, c);
         }
     }
-
-    QueryPerformanceCounter(&t2);
-
-    deltaTime = (double)(t2.QuadPart - t1.QuadPart) / frequency.QuadPart;
 }
 
 /*
@@ -465,28 +494,32 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
         .radius = 1,
         .color = (rgb) {.red = 255, .green = 0, .blue = 0 },
         .specular = 500,
-        .reflectivity = 0.2
+        .reflectivity = 0.2,
+        .rSquare = 1
     };
 
     sphere blue = (sphere){ .center = (vec3){.x = 2.0, .y = 0.0, .z = 4.0},
         .radius = 1,
         .color = (rgb) {.red = 0, .green = 0, .blue = 255 },
         .specular = 500,
-        .reflectivity = 0.3
+        .reflectivity = 0.3,
+        .rSquare = 1
     };
 
     sphere green = (sphere){ .center = (vec3){.x = -2.0, .y = 0.0, .z = 4.0},
         .radius = 1,
         .color = (rgb) {.red = 0, .green = 255, .blue = 0 },
         .specular = 10,
-        .reflectivity = 0.4
+        .reflectivity = 0.4,
+        .rSquare = 1
     };
 
     sphere yellow = (sphere){ .center = (vec3){.x = 0.0, .y = -5001.0, .z = 0.0},
         .radius = 5000,
         .color = (rgb) {.red = 255, .green = 255, .blue = 0 },
         .specular = 1000,
-        .reflectivity = 0.5
+        .reflectivity = 0.5,
+        .rSquare = 25000000
     };
 
     sceneList.data = &red;
@@ -536,6 +569,11 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     };
 
     while (!quit) {
+
+        QueryPerformanceFrequency(&frequency);
+
+        QueryPerformanceCounter(&t1);
+
         static MSG message = { 0 };
         while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&message);
@@ -546,6 +584,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
         InvalidateRect(windowHandle, NULL, FALSE);
         UpdateWindow(windowHandle);
+
+        QueryPerformanceCounter(&t2);
+
+        deltaTime = (double)(t2.QuadPart - t1.QuadPart) / frequency.QuadPart;
     }
     return 0;
 }

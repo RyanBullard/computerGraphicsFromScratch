@@ -10,6 +10,7 @@ typedef struct sphere { // Represents one of the objects in the scene, a sphere.
     rgb color;
     uint32_t specular;
     double reflectivity;
+    uint32_t rSquare;
 } sphere;
 
 typedef struct sphereList { // Holds the list of all objects in the hard coded scene.
