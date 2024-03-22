@@ -132,13 +132,16 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="color.c" />
+    <ClCompile Include="light.c" />
     <ClCompile Include="rayTracer.c" />
+    <ClCompile Include="sphere.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="color.h" />
     <ClInclude Include="light.h" />
     <ClInclude Include="missingKeys.h" />
     <ClInclude Include="sphere.h" />
+    <ClInclude Include="standardHeader.h" />
     <ClInclude Include="vec3.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

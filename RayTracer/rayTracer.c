@@ -13,6 +13,7 @@
 #include "light.h"
 #include "sphere.h"
 #include "missingKeys.h"
+#include "standardHeader.h"
 
 #define VIEWPORT_WIDTH 1
 #define VIEWPORT_HEIGHT 1
@@ -52,8 +53,8 @@ static rgb background = { // Holds our background color for the scene.
     .blue = 0
 }; 
 
-sphereList sceneList; // Global list of objects in the scene.
-light sceneLight; // Global light identifiers.
+sphereList *sceneList; // Global list of objects in the scene.
+light *sceneLight; // Global light identifiers.
 
 vec3 x = { // The x unit vector in 3 space.
     .x = 1,
@@ -200,7 +201,6 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
 
         case WM_KEYDOWN: {
             double rot[3][3];
-            //double currY = camera.cameraPos.y;
             generate2DRotMatrix(rot);
 
             vec3 totalMovement;
@@ -230,7 +230,6 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
             totalMovement = vecConstMul(5 * deltaTime, &totalMovement);
 
             camera.cameraPos = vecAdd(&totalMovement, &camera.cameraPos);
-            //camera.cameraPos.y = currY; // Reset y so we only move in XZ plane.
 
             if (GetAsyncKeyState(VK_SPACE) < 0) {
                 camera.cameraPos.y += 5 * deltaTime; // These will always be relative to flat y axis to not lose orientation.
@@ -355,7 +354,7 @@ static sphereResult intersectRaySphere(vec3 *origin, vec3 *direction, sphere *s,
 static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, double dDotD) {
     double closestT = DBL_MAX;
     sphere *closestSphere = NULL;
-    for (sphereList *node = &sceneList; node != NULL; node = node->next) {
+    for (sphereList *node = sceneList; node != NULL; node = node->next) {
         sphereResult result = intersectRaySphere(origin, D, node->data, dDotD);
 
         if (result.firstT > t_min && result.firstT < t_max && result.firstT < closestT) {
@@ -376,7 +375,7 @@ static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, 
  * With shadows, we only care if the directed light is blocked at all, instead of finding the closest.
  */
 static bool anyIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, double dDotD) {
-    for (sphereList *node = &sceneList; node != NULL; node = node->next) {
+    for (sphereList *node = sceneList; node != NULL; node = node->next) {
         sphereResult result = intersectRaySphere(origin, D, node->data, dDotD);
 
         if (result.firstT > t_min && result.firstT < t_max) {
@@ -395,31 +394,35 @@ static bool anyIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, d
  */
 static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) {
     double intensity = 0.0;
-    intensity += sceneLight.ambient;
-    for (dirLightList *dLightNode = sceneLight.dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
-        double nDotL = dotProduct(normal, &dLightNode->data.dir);
-        intersectResult shadow = closestIntersection(point, &dLightNode->data.dir, 0.001, DBL_MAX,
-            dotProduct(&dLightNode->data.dir, &dLightNode->data.dir));
+    intensity += sceneLight->ambient;
+    for (dirLightList *dLightNode = sceneLight->dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
+        double nDotL = dotProduct(normal, dLightNode->data->dir);
+        intersectResult shadow = closestIntersection(point, dLightNode->data->dir, 0.001, DBL_MAX,
+            dotProduct(dLightNode->data->dir, dLightNode->data->dir));
 
         if (shadow.s != NULL) {
             continue;
         }
 
         if (nDotL > 0) {
-            intensity += dLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&dLightNode->data.dir));
+            intensity += dLightNode->data->intensity * nDotL / (magnitude(normal) * magnitude(dLightNode->data->dir));
         }
 
+        intensity += dLightNode->data->intensity * nDotL / (magnitude(normal) * magnitude(dLightNode->data->dir));
+
         if (spec != -1) {
-            vec3 r = reflectRay(&dLightNode->data.dir, normal);
+            vec3 r = reflectRay(dLightNode->data->dir, normal);
             double rDotV = dotProduct(&r, &v);
             if (rDotV > 0) {
-                intensity += dLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
+                intensity += dLightNode->data->intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
             }
         }
     }
 
-    for (pointLightList *pLightNode = sceneLight.pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
-        vec3 pointNorm = vecSub(&pLightNode->data.pos, point);
+    //printf("%lf\n", intensity);
+
+    for (pointLightList *pLightNode = sceneLight->pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
+        vec3 pointNorm = vecSub(pLightNode->data->pos, point);
         double nDotL = dotProduct(normal, &pointNorm);
 
         if (anyIntersection(point, &pointNorm, 0.001, 1.0, dotProduct(&pointNorm, &pointNorm))) {
@@ -427,14 +430,14 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
         }
 
         if (nDotL > 0) {
-            intensity += pLightNode->data.intensity * nDotL / (magnitude(normal) * magnitude(&pointNorm));
+            intensity += pLightNode->data->intensity * nDotL / (magnitude(normal) * magnitude(&pointNorm));
         }
 
         if (spec != -1) {
             vec3 r = reflectRay(&pointNorm, normal);
             double rDotV = dotProduct(&r, &v);
             if (rDotV > 0) {
-                intensity += pLightNode->data.intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
+                intensity += pLightNode->data->intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
             }
         }
     }
@@ -519,83 +522,33 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
     // Build our list of spheres in the scene
 
-    sphere red = (sphere){ .center = (vec3){.x = 0.0, .y = -1.0, .z = 3.0},
-        .radius = 1,
-        .color = (rgb) {.red = 255, .green = 0, .blue = 0 },
-        .specular = 500,
-        .reflectivity = 0.2,
-        .rSquare = 1
-    };
+    sceneList = initSpheres();
+    addSphere(sceneList, (vec3) { .x = 0.0, .y = -1.0, .z = 3.0 }, (rgb) { .red = 255, .green = 0, .blue = 0 },
+        1, 500, 0.2);
+    addSphere(sceneList, (vec3) { .x = 2.0, .y = 0.0, .z = 4.0 }, (rgb) { .red = 0, .green = 0, .blue = 255 },
+        1, 500, 0.3);
+    addSphere(sceneList, (vec3) { .x = -2.0, .y = 0.0, .z = 4.0 }, (rgb) { .red = 0, .green = 255, .blue = 0 },
+        1, 10, 0.4);
+    addSphere(sceneList, (vec3) { .x = 0.0, .y = -5001.0, .z = 0.0 }, (rgb) { .red = 255, .green = 255, .blue = 0 },
+        5000, 1000, 0.5);
 
-    sphere blue = (sphere){ .center = (vec3){.x = 2.0, .y = 0.0, .z = 4.0},
-        .radius = 1,
-        .color = (rgb) {.red = 0, .green = 0, .blue = 255 },
-        .specular = 500,
-        .reflectivity = 0.3,
-        .rSquare = 1
-    };
-
-    sphere green = (sphere){ .center = (vec3){.x = -2.0, .y = 0.0, .z = 4.0},
-        .radius = 1,
-        .color = (rgb) {.red = 0, .green = 255, .blue = 0 },
-        .specular = 10,
-        .reflectivity = 0.4,
-        .rSquare = 1
-    };
-
-    sphere yellow = (sphere){ .center = (vec3){.x = 0.0, .y = -5001.0, .z = 0.0},
-        .radius = 5000,
-        .color = (rgb) {.red = 255, .green = 255, .blue = 0 },
-        .specular = 1000,
-        .reflectivity = 0.5,
-        .rSquare = 25000000
-    };
-
-    sceneList.data = &red;
-    sphereList second = (sphereList){ 0 };
-    second.data = &blue;
-    sphereList third = (sphereList){ 0 };
-    third.data = &green;
-    sphereList fourth = (sphereList){ 0 };
-    fourth.data = &yellow;
-
-    sceneList.next = &second;
-    second.next = &third;
-    third.next = &fourth;
-    fourth.next = NULL;
-
-    //Build our list of lights in the scene
-    pointLight pLight = (pointLight){
-        .intensity = 0.6,
-        .pos = (vec3){
+    vec3 point = (vec3){
             .x = 2.0,
             .y = 1.0,
             .z = 0.0
-        }
     };
-    dirLight dLight = (dirLight){
-        .intensity = 0.2,
-        .dir = (vec3){
+
+    vec3 dir = (vec3){
             .x = 1.0,
             .y = 4.0,
             .z = 4.0
-        } 
     };
 
-    dirLightList dList = (dirLightList){
-        .data = dLight,
-        .next = NULL
-    };
-    pointLightList pList = (pointLightList){
-        .data = pLight,
-        .next = NULL
-    };
+    sceneLight = initLights();
 
-    sceneLight = (light){
-        .ambient = 0.2,
-        .dirList = &dList,
-        .pointList = &pList
-    };
+    addPLight(sceneLight, &point, 0.6);
+    addDLight(sceneLight, &dir, 0.2);
+    setAmbient(sceneLight, 0.2);
 
     while (!quit) {
 
@@ -620,5 +573,8 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
         deltaTime = (double)(t2.QuadPart - t1.QuadPart) / frequency.QuadPart;
     }
+
+    freeLights(sceneLight);
+    freeSphereList(sceneList);
     return 0;
 }

@@ -21,6 +21,12 @@
     <ClCompile Include="color.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="light.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sphere.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="color.h">
@@ -36,6 +42,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="missingKeys.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="standardHeader.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -2,6 +2,7 @@
 
 #include "vec3.h"
 #include "color.h"
+#include "standardHeader.h"
 #include <stdint.h>
 
 typedef struct sphere { // Represents one of the objects in the scene, a sphere.
@@ -22,3 +23,7 @@ typedef struct sphereResult { // Used to hold information when determining which
     double firstT;
     double secondT;
 } sphereResult;
+
+void freeSphereList(sphereList*);
+void addSphere(sphereList*, vec3, rgb, uint32_t, uint32_t, double);
+sphereList *initSpheres();
