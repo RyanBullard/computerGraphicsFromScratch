@@ -54,16 +54,14 @@ inline double magnitude(vec3 *vector) {
 }
 
 /*
- * normalize - Returns the normalized vector of the passed in vector. That is - each component is divided
+ * normalize -  normalizes a vector in place. That is - each component is divided
  * by the overall magnitude of the vector.
  */
-vec3 normalize(vec3 *vector) {
+inline void normalize(vec3 *vector) {
     double mag = magnitude(vector);
-    return (vec3) {
-        .x = mag * vector->x,
-            .y = mag * vector->y,
-            .z = mag * vector->z
-    };
+    vector->x = vector->x * mag;
+    vector->y = vector->y * mag;
+    vector->z = vector->z * mag;
 }
 
 /*

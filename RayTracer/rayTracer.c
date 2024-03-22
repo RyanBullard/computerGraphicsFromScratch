@@ -34,7 +34,7 @@ typedef struct intersectResult { // Used to hold information about the sphere th
     double t;
 } intersectResult;
 
-typedef struct camInfo {
+typedef struct camInfo { // Holds all of the information about the current state of the camera.
     double xRot;
     double yRot;
     double zRot;
@@ -73,7 +73,7 @@ vec3 z = { // The z unit vector in 3 space.
     .z = 1
 };
 
-camInfo camera = {
+camInfo camera = { // Set up the default camera.
     .xRot = 0.0,
     .yRot = 0.0,
     .zRot = 0.0,
@@ -85,13 +85,16 @@ camInfo camera = {
     }
 };
 
+double rotMatrix[3][3] = { 0 }; // Used to hold our cached rotation matrix for each frame.
+
 double deltaTime = 1000000 / FRAMESPERSECOND;
 
 LARGE_INTEGER frequency;
 LARGE_INTEGER t1, t2;
 
 /*
- * generateRotationMatrix - Generates the 3D rotation matrix corresponding to the current roll, yaw, and pitch of the camera.
+ * generateRotationMatrix - Generates the 3D rotation matrix corresponding to the current roll, yaw, and pitch of the
+ * camera. This is regenerated and cached each frame, but can accept an arbitrary destination if needed.
  */
 static void generateRotMatrix(double dest[3][3]) {
 
@@ -116,7 +119,30 @@ static void generateRotMatrix(double dest[3][3]) {
 }
 
 /*
- * normalizeRotation - Ensures the rotation of the camera remains in the bounds [0, 2Pi].
+ * generate2DRotationMatrix - Generates the rotation matrix in the XZ plane. Used so that forward and backward movement
+ * are not affected by the yaw of the camera.
+ */
+static void generate2DRotMatrix(double dest[3][3]) {
+
+    double sinBeta = sin(camera.yRot);
+    double cosBeta = cos(camera.yRot);
+
+    dest[0][0] = cosBeta;
+    dest[0][1] = 0;
+    dest[0][2] = -sinBeta;
+
+    dest[1][0] = 0;
+    dest[1][1] = 0;
+    dest[1][2] = 0;
+
+    dest[2][0] = sinBeta;
+    dest[2][1] = 0;
+    dest[2][2] = cosBeta;
+}
+
+/*
+ * normalizeRotation - Ensures the rotation of the camera remains in the bounds [0, 2Pi]. Ensures that rotation does
+ * not underflow or overflow.
  */
 static void normalizeRotation() {
     if (camera.xRot > M_2PI) {
@@ -171,36 +197,36 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
         } break;
 
         case WM_KEYDOWN: {
+            double rot2D[3][3];
+            generate2DRotMatrix(rot2D);
 
-            double rot[3][3];
+            vec3 totalMovement;
+            vec3 movementX = { 0 };
+            vec3 movementZ = { 0 };
 
             if (GetAsyncKeyState(VK_W) < 0) { // These keys can all be held down at once
-                generateRotMatrix(rot);
-                vec3 movement = multiplyMV(rot, &z);
-                movement = vecConstMul(5 * deltaTime, &movement);
-                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
+                movementZ = multiplyMV(rot2D, &z);
             }
 
             if (GetAsyncKeyState(VK_S) < 0) {
-                generateRotMatrix(rot);
-                vec3 movement = multiplyMV(rot, &z);
-                movement = vecConstMul(-5 * deltaTime, &movement);
-                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
+                movementZ = multiplyMV(rot2D, &z);
+                movementZ = vecConstMul(-1, &movementZ);
             }
 
             if (GetAsyncKeyState(VK_A) < 0) {
-                generateRotMatrix(rot);
-                vec3 movement = multiplyMV(rot, &x);
-                movement = vecConstMul(-5 * deltaTime, &movement);
-                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
+                movementX = multiplyMV(rot2D, &x);
+                movementX = vecConstMul(-1, &movementX);
             }
 
             if (GetAsyncKeyState(VK_D) < 0) {
-                generateRotMatrix(rot);
-                vec3 movement = multiplyMV(rot, &x);
-                movement = vecConstMul(5 * deltaTime, &movement);
-                camera.cameraPos = vecAdd(&movement, &camera.cameraPos);
+                movementX = multiplyMV(rot2D, &x);
             }
+
+            totalMovement = vecAdd(&movementX, &movementZ);
+            normalize(&totalMovement);
+            totalMovement = vecConstMul(5 * deltaTime, &totalMovement);
+
+            camera.cameraPos = vecAdd(&totalMovement, &camera.cameraPos);
 
             if (GetAsyncKeyState(VK_SPACE) < 0) {
                 camera.cameraPos.y += 5 * deltaTime; // These will always be relative to flat y axis to not lose orientation.
@@ -342,8 +368,8 @@ static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, 
 }
 
 /*
- * closestIntersection - Finds the closest sphere to a point that intersects a given vector. If the .s field of the
- * returned intersectResult struct is NULL, then no sphere intersects this vector.
+ * anyIntersection - Returns if there is any intersection with this ray at all. Used for shadow calculations.
+ * With shadows, we only care if the directed light is blocked at all, instead of finding the closest sphere.
  */
 static bool anyIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, double dDotD) {
     for (sphereList *node = &sceneList; node != NULL; node = node->next) {
@@ -430,7 +456,7 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
     vec3 tD = vecConstMul(closestT, D);
     vec3 p = vecAdd(origin, &tD);
     vec3 normal = vecSub(&p, &closestSphere->center);
-    normal = normalize(&normal);
+    normalize(&normal);
     vec3 view = vecConstMul(-1, D);
     rgb localColor = colorMul(closestSphere->color, computeLighting(&p, &normal, view, closestSphere->specular));
 
@@ -451,8 +477,6 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
  */
 static void renderScene() {
     uint32_t recursionDepth = 3;
-    double rotMatrix[3][3] = { 0 };
-    generateRotMatrix(rotMatrix);
     for (int x = -frame.width / 2; x < frame.width / 2; x++) {
         for (int y = -frame.height / 2; y < frame.height / 2 + 1; y++) {
             vec3 D;
@@ -482,8 +506,9 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     bmi.bmiHeader.biCompression = BI_RGB;
     fdc = CreateCompatibleDC(0);
 
-    HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE,
-        0, 0, 500, 500, NULL, NULL, hInstance, NULL);
+    HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", 
+        ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE, 0, 0, 500, 500,
+        NULL, NULL, hInstance, NULL);
     if (windowHandle == NULL) {
         return -1;
     }
@@ -579,6 +604,8 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
             TranslateMessage(&message);
             DispatchMessage(&message);
         }
+
+        generateRotMatrix(rotMatrix);
 
         renderScene();
 
