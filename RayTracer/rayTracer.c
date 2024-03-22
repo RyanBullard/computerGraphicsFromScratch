@@ -34,7 +34,7 @@ typedef struct intersectResult { // Used to hold information about the sphere th
     double t;
 } intersectResult;
 
-typedef struct camInfo { // Holds all of the information about the current state of the camera.
+typedef struct camInfo {
     double xRot;
     double yRot;
     double zRot;
@@ -73,7 +73,7 @@ vec3 z = { // The z unit vector in 3 space.
     .z = 1
 };
 
-camInfo camera = { // Set up the default camera.
+camInfo camera = {
     .xRot = 0.0,
     .yRot = 0.0,
     .zRot = 0.0,
@@ -85,7 +85,7 @@ camInfo camera = { // Set up the default camera.
     }
 };
 
-double rotMatrix[3][3] = { 0 }; // Used to hold our cached rotation matrix for each frame.
+double rotMatrix[3][3] = { 0 };
 
 double deltaTime = 1000000 / FRAMESPERSECOND;
 
@@ -119,23 +119,25 @@ static void generateRotMatrix(double dest[3][3]) {
 }
 
 /*
- * generate2DRotationMatrix - Generates the rotation matrix in the XZ plane. Used so that forward and backward movement
- * are not affected by the yaw of the camera.
+ * generate2DRotationMatrix - Generates the 2D rotation matrix corresponding to the current roll and pitch of the
+ * camera. Allows for the camera to not move up or down when looking up or down, with full speed movement.
  */
 static void generate2DRotMatrix(double dest[3][3]) {
 
+    double sinAlpha = sin(camera.zRot);
+    double cosAlpha = cos(camera.zRot);
     double sinBeta = sin(camera.yRot);
     double cosBeta = cos(camera.yRot);
 
-    dest[0][0] = cosBeta;
-    dest[0][1] = 0;
-    dest[0][2] = -sinBeta;
+    dest[0][0] = cosAlpha * cosBeta;
+    dest[0][1] =  -sinAlpha;
+    dest[0][2] = cosAlpha * sinBeta;
 
-    dest[1][0] = 0;
-    dest[1][1] = 0;
-    dest[1][2] = 0;
+    dest[1][0] = sinAlpha * cosBeta;
+    dest[1][1] = cosAlpha;
+    dest[1][2] = sinAlpha * sinBeta;
 
-    dest[2][0] = sinBeta;
+    dest[2][0] = -sinBeta;
     dest[2][1] = 0;
     dest[2][2] = cosBeta;
 }
@@ -197,29 +199,30 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
         } break;
 
         case WM_KEYDOWN: {
-            double rot2D[3][3];
-            generate2DRotMatrix(rot2D);
+            double rot[3][3];
+            //double currY = camera.cameraPos.y;
+            generate2DRotMatrix(rot);
 
             vec3 totalMovement;
             vec3 movementX = { 0 };
             vec3 movementZ = { 0 };
 
             if (GetAsyncKeyState(VK_W) < 0) { // These keys can all be held down at once
-                movementZ = multiplyMV(rot2D, &z);
+                movementZ = multiplyMV(rot, &z);
             }
 
             if (GetAsyncKeyState(VK_S) < 0) {
-                movementZ = multiplyMV(rot2D, &z);
+                movementZ = multiplyMV(rot, &z);
                 movementZ = vecConstMul(-1, &movementZ);
             }
 
             if (GetAsyncKeyState(VK_A) < 0) {
-                movementX = multiplyMV(rot2D, &x);
+                movementX = multiplyMV(rot, &x);
                 movementX = vecConstMul(-1, &movementX);
             }
 
             if (GetAsyncKeyState(VK_D) < 0) {
-                movementX = multiplyMV(rot2D, &x);
+                movementX = multiplyMV(rot, &x);
             }
 
             totalMovement = vecAdd(&movementX, &movementZ);
@@ -227,6 +230,7 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
             totalMovement = vecConstMul(5 * deltaTime, &totalMovement);
 
             camera.cameraPos = vecAdd(&totalMovement, &camera.cameraPos);
+            //camera.cameraPos.y = currY; // Reset y so we only move in XZ plane.
 
             if (GetAsyncKeyState(VK_SPACE) < 0) {
                 camera.cameraPos.y += 5 * deltaTime; // These will always be relative to flat y axis to not lose orientation.
@@ -369,7 +373,7 @@ static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, 
 
 /*
  * anyIntersection - Returns if there is any intersection with this ray at all. Used for shadow calculations.
- * With shadows, we only care if the directed light is blocked at all, instead of finding the closest sphere.
+ * With shadows, we only care if the directed light is blocked at all, instead of finding the closest.
  */
 static bool anyIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, double dDotD) {
     for (sphereList *node = &sceneList; node != NULL; node = node->next) {
