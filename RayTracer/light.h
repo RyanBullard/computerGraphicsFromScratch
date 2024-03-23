@@ -5,12 +5,12 @@
 
 typedef struct pointLight { // Represents light emitted from a singular point in the scene. Similar to a light bulb.
     double intensity;
-    vec3 *pos;
+    vec3 pos;
 } pointLight;
 
 typedef struct dirLight { // Represents a light coming from a certain direction. Similar to the sun.
     double intensity;
-    vec3 *dir;
+    vec3 dir;
 } dirLight;
 
 typedef struct pointLightList { // Holds a list of all point lights placed in the scene.
@@ -30,7 +30,7 @@ typedef struct light { // Represents the overall lights in the scene.
 } light;
 
 void freeLights(light*);
-void addDLight(light*, vec3*, double);
-void addPLight(light*, vec3*, double);
+void addDLight(light*, vec3, double);
+void addPLight(light*, vec3, double);
 void setAmbient(light*, double);
 light *initLights();

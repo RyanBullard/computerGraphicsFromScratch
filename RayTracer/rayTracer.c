@@ -1,5 +1,4 @@
 #include <windows.h>
-#include <ConsoleApi.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -21,6 +20,8 @@
 #define M_PI 3.14159265358979323846
 #define M_2PI 6.2831853071795865
 #define FRAMESPERSECOND 60
+#define MAXTHREADS 10
+#define MOVESPEED 10
 
 static bool quit = false;
 
@@ -92,6 +93,8 @@ double deltaTime = 1000000 / FRAMESPERSECOND;
 
 LARGE_INTEGER frequency;
 LARGE_INTEGER t1, t2;
+
+HANDLE hThreads[MAXTHREADS] = { NULL };
 
 /*
  * generateRotationMatrix - Generates the 3D rotation matrix corresponding to the current roll, yaw, and pitch of the
@@ -227,16 +230,16 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
 
             totalMovement = vecAdd(&movementX, &movementZ);
             normalize(&totalMovement);
-            totalMovement = vecConstMul(5 * deltaTime, &totalMovement);
+            totalMovement = vecConstMul(MOVESPEED * deltaTime, &totalMovement);
 
             camera.cameraPos = vecAdd(&totalMovement, &camera.cameraPos);
 
             if (GetAsyncKeyState(VK_SPACE) < 0) {
-                camera.cameraPos.y += 5 * deltaTime; // These will always be relative to flat y axis to not lose orientation.
+                camera.cameraPos.y += MOVESPEED * deltaTime; // These will always be relative to flat y axis to not lose orientation.
             }
 
             if (GetAsyncKeyState(VK_SHIFT) < 0) {
-                camera.cameraPos.y -= 5 * deltaTime;
+                camera.cameraPos.y -= MOVESPEED * deltaTime;
             }
 
             switch(wParam) { // Only allow one of these at once
@@ -279,6 +282,14 @@ static LRESULT CALLBACK WindowProcessMessage(HWND windowHandle, UINT message, WP
                 case VK_LEFT: {
                     camera.zRot -= M_2PI * deltaTime;
                 } break;
+
+                case VK_J: {
+                    addSphere(sceneList, camera.cameraPos, (rgb) { .red = 160, .green = 32, .blue = 240 }, 2, 600, 0.1);
+                }break;
+
+                case VK_L: {
+                    addPLight(sceneLight, camera.cameraPos, 0.5);
+                }break;
             }
             normalizeRotation();
         } break;
@@ -396,22 +407,22 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
     double intensity = 0.0;
     intensity += sceneLight->ambient;
     for (dirLightList *dLightNode = sceneLight->dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
-        double nDotL = dotProduct(normal, dLightNode->data->dir);
-        intersectResult shadow = closestIntersection(point, dLightNode->data->dir, 0.001, DBL_MAX,
-            dotProduct(dLightNode->data->dir, dLightNode->data->dir));
+        double nDotL = dotProduct(normal, &dLightNode->data->dir);
+        intersectResult shadow = closestIntersection(point, &dLightNode->data->dir, 0.001, DBL_MAX,
+            dotProduct(&dLightNode->data->dir, &dLightNode->data->dir));
 
         if (shadow.s != NULL) {
             continue;
         }
 
         if (nDotL > 0) {
-            intensity += dLightNode->data->intensity * nDotL / (magnitude(normal) * magnitude(dLightNode->data->dir));
+            intensity += dLightNode->data->intensity * nDotL / (magnitude(normal) * magnitude(&dLightNode->data->dir));
         }
 
-        intensity += dLightNode->data->intensity * nDotL / (magnitude(normal) * magnitude(dLightNode->data->dir));
+        intensity += dLightNode->data->intensity * nDotL / (magnitude(normal) * magnitude(&dLightNode->data->dir));
 
         if (spec != -1) {
-            vec3 r = reflectRay(dLightNode->data->dir, normal);
+            vec3 r = reflectRay(&dLightNode->data->dir, normal);
             double rDotV = dotProduct(&r, &v);
             if (rDotV > 0) {
                 intensity += dLightNode->data->intensity * pow(rDotV / (magnitude(&r) * magnitude(&v)), spec);
@@ -419,10 +430,8 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
         }
     }
 
-    //printf("%lf\n", intensity);
-
     for (pointLightList *pLightNode = sceneLight->pointList; pLightNode != NULL; pLightNode = pLightNode->next) {
-        vec3 pointNorm = vecSub(pLightNode->data->pos, point);
+        vec3 pointNorm = vecSub(&pLightNode->data->pos, point);
         double nDotL = dotProduct(normal, &pointNorm);
 
         if (anyIntersection(point, &pointNorm, 0.001, 1.0, dotProduct(&pointNorm, &pointNorm))) {
@@ -479,13 +488,12 @@ static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t 
     return colorAdd(colorMul(localColor, 1 - r), colorMul(reflectedColor, r)); // Blend the colors of the reflection and the actual color.
 }
 
-/*
- * renderScene - Does the needed setup, then calls the required functions to render the raytraced scene.
- */
-static void renderScene() {
+void renderOnThreadID(void* pMyID) {
+    int MyID = (int)(uintptr_t)pMyID;
     uint32_t recursionDepth = 3;
     for (int x = -frame.width / 2; x < frame.width / 2; x++) {
-        for (int y = -frame.height / 2; y < frame.height / 2 + 1; y++) {
+        for (int y = -frame.height / 2 + (frame.height / MAXTHREADS) * MyID; 
+            y < -frame.height / 2 + (frame.height / MAXTHREADS) * (MyID + 1) + 1; y++) { // Evil hack to get each thread to render the same amount of lines
             vec3 D;
             canvasToViewport(x, y, &D);
             D = multiplyMV(rotMatrix, &D);
@@ -493,6 +501,16 @@ static void renderScene() {
             putPixel(x, y, c);
         }
     }
+}
+
+/*
+ * renderScene - Does the needed setup, then calls the required functions to render the raytraced scene.
+ */
+static void renderScene() {
+    for (int i = 0; i < MAXTHREADS; i++) {
+        hThreads[i] = (HANDLE)_beginthread(renderOnThreadID, 0, (void *)(uintptr_t)i);
+    }
+    WaitForMultipleObjects(MAXTHREADS, hThreads, TRUE, INFINITE);
 }
 
 /*
@@ -532,22 +550,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     addSphere(sceneList, (vec3) { .x = 0.0, .y = -5001.0, .z = 0.0 }, (rgb) { .red = 255, .green = 255, .blue = 0 },
         5000, 1000, 0.5);
 
-    vec3 point = (vec3){
-            .x = 2.0,
-            .y = 1.0,
-            .z = 0.0
-    };
-
-    vec3 dir = (vec3){
-            .x = 1.0,
-            .y = 4.0,
-            .z = 4.0
-    };
-
     sceneLight = initLights();
 
-    addPLight(sceneLight, &point, 0.6);
-    addDLight(sceneLight, &dir, 0.2);
+    addPLight(sceneLight, (vec3) { .x = 2.0, .y = 1.0, .z = 0.0 }, 0.6);
+    addDLight(sceneLight, (vec3) { .x = 1.0, .y = 4.0, .z = 4.0 }, 0.2);
     setAmbient(sceneLight, 0.2);
 
     while (!quit) {

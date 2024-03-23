@@ -14,7 +14,7 @@ void setAmbient(light *light, double intensity) {
 	light->ambient = intensity;
 }
 
-void addPLight(light *list, vec3 *pos, double intensity) {
+void addPLight(light *list, vec3 pos, double intensity) {
 	pointLightList *curr = list->pointList;
 	if (curr == NULL) {
 		list->pointList = (pointLightList *)malloc(sizeof(pointLightList));
@@ -38,7 +38,7 @@ void addPLight(light *list, vec3 *pos, double intensity) {
 	}
 }
 
-void addDLight(light *list, vec3 *dir, double intensity) {
+void addDLight(light *list, vec3 dir, double intensity) {
 	dirLightList *curr = list->dirList;
 	if (curr == NULL) {
 		list->dirList = (dirLightList *)malloc(sizeof(dirLightList));
