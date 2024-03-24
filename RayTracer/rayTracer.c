@@ -14,14 +14,14 @@
 #include "missingKeys.h"
 #include "standardHeader.h"
 
-#define VIEWPORT_WIDTH 1
-#define VIEWPORT_HEIGHT 1
+#define VIEWPORT_WIDTH 2
+#define VIEWPORT_HEIGHT 2
 #define DISTANCE 1
 #define M_PI 3.14159265358979323846
 #define M_2PI 6.2831853071795865
 #define FRAMESPERSECOND 60
 #define MAXTHREADS 10
-#define MOVESPEED 10
+#define MOVESPEED 5
 
 static bool quit = false;
 
@@ -54,22 +54,22 @@ static rgb background = { // Holds our background color for the scene.
     .blue = 0
 }; 
 
-sphereList *sceneList; // Global list of objects in the scene.
-light *sceneLight; // Global light identifiers.
+const sphereList *sceneList; // Global list of objects in the scene.
+const light *sceneLight; // Global light identifiers.
 
-vec3 x = { // The x unit vector in 3 space.
+const vec3 x = { // The x unit vector in 3 space.
     .x = 1,
     .y = 0,
     .z = 0
 };
 
-vec3 y = { // The y unit vector in 3 space.
+const vec3 y = { // The y unit vector in 3 space.
     .x = 0,
     .y = 1,
     .z = 0
 };
 
-vec3 z = { // The z unit vector in 3 space.
+const vec3 z = { // The z unit vector in 3 space.
     .x = 0,
     .y = 0,
     .z = 1
@@ -91,8 +91,8 @@ double rotMatrix[3][3] = { 0 };
 
 double deltaTime = 1000000 / FRAMESPERSECOND;
 
-LARGE_INTEGER frequency;
-LARGE_INTEGER t1, t2;
+const LARGE_INTEGER frequency;
+const LARGE_INTEGER t1, t2;
 
 HANDLE hThreads[MAXTHREADS] = { NULL };
 
@@ -385,7 +385,7 @@ static intersectResult closestIntersection(vec3 *origin, vec3 *D, double t_min, 
  * anyIntersection - Returns if there is any intersection with this ray at all. Used for shadow calculations.
  * With shadows, we only care if the directed light is blocked at all, instead of finding the closest.
  */
-static bool anyIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, double dDotD) {
+static bool anyIntersection(const vec3 *origin, const vec3 *D, const double t_min, const double t_max, const double dDotD) {
     for (sphereList *node = sceneList; node != NULL; node = node->next) {
         sphereResult result = intersectRaySphere(origin, D, node->data, dDotD);
 
@@ -403,7 +403,7 @@ static bool anyIntersection(vec3 *origin, vec3 *D, double t_min, double t_max, d
 /*
  * computeLighting - Computes the intensity of lighting at a certain point in the scene.
  */
-static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) {
+static double computeLighting(const vec3 *point, const vec3 *normal, const vec3 v, const uint32_t spec) {
     double intensity = 0.0;
     intensity += sceneLight->ambient;
     for (dirLightList *dLightNode = sceneLight->dirList; dLightNode != NULL; dLightNode = dLightNode->next) {
@@ -457,7 +457,7 @@ static double computeLighting(vec3 *point, vec3 *normal, vec3 v, uint32_t spec) 
 /*
  * traceRay - Follows a ray from the view plane into the scene, and finds the color that needs to be plotted.
  */
-static rgb traceRay(vec3 *origin, vec3 *D, double t_min, double t_max, uint32_t depth) {
+static rgb traceRay(const vec3 *origin, const vec3 *D, const double t_min, const double t_max, const uint32_t depth) {
 
     double dDotD = dotProduct(D, D);
 
@@ -492,7 +492,7 @@ void renderOnThreadID(void* pMyID) {
     int MyID = (int)(uintptr_t)pMyID;
     uint32_t recursionDepth = 3;
     for (int x = -frame.width / 2; x < frame.width / 2; x++) {
-        for (int y = -frame.height / 2 + (frame.height / MAXTHREADS) * MyID; 
+        for (int y = -frame.height / 2 + (frame.height / MAXTHREADS) * MyID + (MyID == 0 ? 0 : 1); // Hack to avoid overdraw
             y < -frame.height / 2 + (frame.height / MAXTHREADS) * (MyID + 1) + 1; y++) { // Evil hack to get each thread to render the same amount of lines
             vec3 D;
             canvasToViewport(x, y, &D);
@@ -532,7 +532,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     fdc = CreateCompatibleDC(0);
 
     HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", 
-        ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE, 0, 0, 500, 500,
+        ((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE, 0, 0, 1000, 1000,
         NULL, NULL, hInstance, NULL);
     if (windowHandle == NULL) {
         return -1;
