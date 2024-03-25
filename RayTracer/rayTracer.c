@@ -24,6 +24,7 @@ const double M_2PI = 6.2831853071795865;
 const int MOVESPEED = 5;
 
 static bool quit = false;
+static bool pauseCursorLock = false;
 
 struct { // Represents the frame we are drawing to.
 	int width;
@@ -94,6 +95,10 @@ double deltaTime = 1000000 / FRAMESPERSECOND;
 
 const LARGE_INTEGER frequency;
 const LARGE_INTEGER t1, t2;
+
+HCURSOR pointer = NULL;
+POINT mouseLoc;
+RECT screenCenter;
 
 HANDLE hThreads[MAXTHREADS] = { NULL };
 
@@ -175,6 +180,15 @@ static void normalizeRotation() {
 	}
 }
 
+static void rotateOnDelta(int dX, int dY) {
+	int relX = dX - 484;
+	int relY = dY - 493;
+	camera.yRot += relX * 0.001 * M_PI;
+	camera.xRot += relY * 0.001 * M_PI;
+	normalizeRotation();
+	invalidateRotationCache();
+}
+
 /*
  * WindowProcessMessage - Handler to process messages sent from windows to this program.
  */
@@ -243,6 +257,16 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 
 			camera.cameraPos = vecAdd(&totalMovement, &camera.cameraPos);
 
+			if (GetAsyncKeyState(VK_ESCAPE) < 0) {
+				pauseCursorLock = !pauseCursorLock;
+				if (pauseCursorLock) {
+					ShowCursor(true);
+				} else {
+					SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.width / 2 + 32);
+					ShowCursor(false);
+				}
+			}
+
 			if (GetAsyncKeyState(VK_SPACE) < 0) {
 				camera.cameraPos.y += MOVESPEED * deltaTime; // These will always be relative to flat y axis to not lose orientation.
 			}
@@ -252,14 +276,6 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 			}
 
 			switch(wParam) { // Only allow one of these at once
-				case VK_Q: {
-					camera.yRot -= M_2PI * deltaTime;
-					invalidateRotationCache();
-				} break;
-				case VK_E: {
-					camera.yRot += M_2PI * deltaTime;
-					invalidateRotationCache();
-				} break;
 
 				case VK_R: {
 					camera.cameraPos.x = 0;
@@ -278,29 +294,6 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 					invalidateRotationCache();
 				}break;
 
-				case VK_P: {
-					camera.yRot += M_PI;
-					invalidateRotationCache();
-				} break;
-
-				case VK_UP: {
-					camera.xRot -= M_2PI * deltaTime;
-					invalidateRotationCache();
-				} break;
-				case VK_DOWN: {
-					camera.xRot += M_2PI * deltaTime;
-					invalidateRotationCache();
-				} break;
-
-				case VK_RIGHT: {
-					camera.zRot += M_2PI * deltaTime;
-					invalidateRotationCache();
-				} break;
-				case VK_LEFT: {
-					camera.zRot -= M_2PI * deltaTime;
-					invalidateRotationCache();
-				} break;
-
 				case VK_J: {
 					addSphere(sceneList, camera.cameraPos, (rgb) { .red = 160, .green = 32, .blue = 240 }, 2, 600, 0.1);
 				}break;
@@ -311,6 +304,10 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 			}
 			normalizeRotation();
 		} break;
+
+		case WM_SETCURSOR: {
+			SetCursor(pointer);
+		}
 
 		default: {
 			return DefWindowProc(windowHandle, message, wParam, lParam);
@@ -542,6 +539,13 @@ static void renderScene() {
  */
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
+	if (!AllocConsole()) {
+		return -1;
+	}
+
+	freopen_s((FILE **)stdout, "CONOUT$", "w", stdout); // Reattach stdout to the allocated console
+	freopen_s((FILE **)stderr, "CONOUT$", "w", stderr); // Reattach stderr to the allocated console
+
 	// Windows setup, creates our window and the bitmap we will display to the window.
 
 	const wchar_t windowClassName[] = L"Ray Tracer";
@@ -582,9 +586,16 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	addDLight(sceneLight, (vec3) { .x = 1.0, .y = 4.0, .z = 4.0 }, 0.2);
 	setAmbient(sceneLight, 0.2);
 
-	//Generate the initial values for our rotation matrices.
+	// Generate the initial values for our rotation matrices.
 
 	invalidateRotationCache();
+
+	// Cursor setup
+
+	GetWindowRect(windowHandle, &screenCenter);
+	pointer = LoadCursor(NULL, IDC_ARROW);
+	ShowCursor(false);
+	SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.width / 2 + 32);
 
 	while (!quit) {
 
@@ -596,6 +607,17 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&message);
 			DispatchMessage(&message);
+		}
+
+		GetWindowRect(windowHandle, &screenCenter);
+
+		if (!pauseCursorLock) {
+			GetCursorPos(&mouseLoc);
+			ScreenToClient(windowHandle, &mouseLoc); // Gets the current pos relative to our window
+			if ((mouseLoc.x != 484) && (mouseLoc.y != 493)) { // TODO: Make this work with other resolutions
+				rotateOnDelta(mouseLoc.x, mouseLoc.y);
+			}
+			SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.width / 2 + 32);
 		}
 
 		renderScene();
