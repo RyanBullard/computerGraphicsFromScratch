@@ -22,6 +22,7 @@ const double M_2PI = 6.2831853071795865;
 #define FRAMESPERSECOND 60
 #define MAXTHREADS 10
 const int MOVESPEED = 5;
+const double sensitivity = 0.001;
 
 static bool quit = false;
 static bool pauseCursorLock = false;
@@ -99,6 +100,8 @@ const LARGE_INTEGER t1, t2;
 HCURSOR pointer = NULL;
 POINT mouseLoc;
 RECT screenCenter;
+int centerX = 0;
+int centerY = 0;
 
 HANDLE hThreads[MAXTHREADS] = { NULL };
 
@@ -181,10 +184,10 @@ static void normalizeRotation() {
 }
 
 static void rotateOnDelta(int dX, int dY) {
-	int relX = dX - 484;
-	int relY = dY - 493;
-	camera.yRot += relX * 0.001 * M_PI;
-	camera.xRot += relY * 0.001 * M_PI;
+	int relX = dX - centerX;
+	int relY = dY - centerY;
+	camera.yRot += relX * sensitivity * M_PI;
+	camera.xRot += relY * sensitivity * M_PI;
 	normalizeRotation();
 	invalidateRotationCache();
 }
@@ -262,7 +265,7 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 				if (pauseCursorLock) {
 					ShowCursor(true);
 				} else {
-					SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.width / 2 + 32);
+					SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.height / 2 + 32);
 					ShowCursor(false);
 				}
 			}
@@ -595,7 +598,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	GetWindowRect(windowHandle, &screenCenter);
 	pointer = LoadCursor(NULL, IDC_ARROW);
 	ShowCursor(false);
-	SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.width / 2 + 32);
+	SetCursorPos(screenCenter.left + frame.width / 2 - 8, screenCenter.top + frame.height / 2 + 1);
+	GetCursorPos(&mouseLoc);
+	centerX = mouseLoc.x;
+	centerY = mouseLoc.y;
 
 	while (!quit) {
 
@@ -614,10 +620,10 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		if (!pauseCursorLock) {
 			GetCursorPos(&mouseLoc);
 			ScreenToClient(windowHandle, &mouseLoc); // Gets the current pos relative to our window
-			if ((mouseLoc.x != 484) && (mouseLoc.y != 493)) { // TODO: Make this work with other resolutions
+			if (mouseLoc.x != centerX && mouseLoc.y != centerY) {
 				rotateOnDelta(mouseLoc.x, mouseLoc.y);
+				SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.height / 2 + 32);
 			}
-			SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.width / 2 + 32);
 		}
 
 		renderScene();
