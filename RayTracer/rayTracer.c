@@ -33,6 +33,12 @@ struct { // Represents the frame we are drawing to.
 	uint32_t *pixels;
 } frame = { 0 };
 
+struct { // Represents the frame we are drawing to.
+	int width;
+	int height;
+	uint32_t *pixels;
+} frame2 = { 0 };
+
 typedef struct intersectResult { // Used to hold information about the sphere that may intersect a ray.
 	sphere *s;
 	double t;
@@ -58,6 +64,8 @@ static rgb background = { // Holds our background color for the scene.
 
 const sphereList *sceneList; // Global list of objects in the scene.
 const light *sceneLight; // Global light identifiers.
+
+// Camera relevant globals
 
 const vec3 x = { // The x unit vector in 3 space.
 	.x = 1,
@@ -89,20 +97,24 @@ camInfo camera = {
 	}
 };
 
+//Rotation globals
 double rotMatrix[3][3] = { 0 }; // Global matrices, so we can reuse the rotation each frame.
 double rot2D[3][3] = { 0 };
 
-double deltaTime = 1000000 / FRAMESPERSECOND;
+//Delta time globals
+double deltaTime = 1000000.0 / FRAMESPERSECOND;
 
 const LARGE_INTEGER frequency;
 const LARGE_INTEGER t1, t2;
 
+//Cursor globals
 HCURSOR pointer = NULL;
 POINT mouseLoc;
 RECT screenCenter;
 int centerX = 0;
 int centerY = 0;
 
+// Array of threads
 HANDLE hThreads[MAXTHREADS] = { NULL };
 
 /*
@@ -183,6 +195,9 @@ static void normalizeRotation() {
 	}
 }
 
+/*
+ * Handles finding how to rotate the camera based on the change in mouse position each frame.
+ */
 static void rotateOnDelta(int dX, int dY) {
 	int relX = dX - centerX;
 	int relY = dY - centerY;
@@ -260,7 +275,7 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 
 			camera.cameraPos = vecAdd(&totalMovement, &camera.cameraPos);
 
-			if (GetAsyncKeyState(VK_ESCAPE) < 0) {
+			if (GetAsyncKeyState(VK_ESCAPE) < 0) { // Allows the user to disable the cursor lock in the window.
 				pauseCursorLock = !pauseCursorLock;
 				if (pauseCursorLock) {
 					ShowCursor(true);
@@ -308,7 +323,7 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 			normalizeRotation();
 		} break;
 
-		case WM_SETCURSOR: {
+		case WM_SETCURSOR: { // Gets rid of the loading icon when hovering over the window
 			SetCursor(pointer);
 		}
 
@@ -542,12 +557,12 @@ static void renderScene() {
  */
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
-	if (!AllocConsole()) {
-		return -1;
-	}
+	//if (!AllocConsole()) {
+	//	return -1;
+	//}
 
-	freopen_s((FILE **)stdout, "CONOUT$", "w", stdout); // Reattach stdout to the allocated console
-	freopen_s((FILE **)stderr, "CONOUT$", "w", stderr); // Reattach stderr to the allocated console
+	//freopen_s((FILE **)stdout, "CONOUT$", "w", stdout); // Reattach stdout to the allocated console
+	//freopen_s((FILE **)stderr, "CONOUT$", "w", stderr); // Reattach stderr to the allocated console
 
 	// Windows setup, creates our window and the bitmap we will display to the window.
 

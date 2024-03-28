@@ -112,7 +112,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -133,7 +133,9 @@
   <ItemGroup>
     <ClCompile Include="color.c" />
     <ClCompile Include="light.c" />
-    <ClCompile Include="rayTracer.c" />
+    <ClCompile Include="rayTracer.c">
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level3</WarningLevel>
+    </ClCompile>
     <ClCompile Include="sphere.c" />
   </ItemGroup>
   <ItemGroup>
