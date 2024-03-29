@@ -118,7 +118,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <Optimization>Full</Optimization>
+      <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
@@ -141,7 +141,6 @@
   <ItemGroup>
     <ClInclude Include="color.h" />
     <ClInclude Include="light.h" />
-    <ClInclude Include="missingKeys.h" />
     <ClInclude Include="sphere.h" />
     <ClInclude Include="standardHeader.h" />
     <ClInclude Include="vec3.h" />

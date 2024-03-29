@@ -1,18 +1,13 @@
 #include <windows.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
 #include <float.h>
-#include <limits.h>
-#include <time.h>
 
 #include "color.h"
 #include "vec3.h"
 #include "light.h"
 #include "sphere.h"
-#include "missingKeys.h"
-#include "standardHeader.h"
 
 const int VIEWPORT_WIDTH = 2;
 const int VIEWPORT_HEIGHT = 2;
@@ -24,20 +19,14 @@ const double M_2PI = 6.2831853071795865;
 const int MOVESPEED = 5;
 const double sensitivity = 0.001;
 
-static bool quit = false;
-static bool pauseCursorLock = false;
+static uint8_t quit = 0;
+static uint8_t pauseCursorLock = 0;
 
-struct { // Represents the frame we are drawing to.
+struct frame { // Represents the frame we are drawing to.
 	int width;
 	int height;
 	uint32_t *pixels;
 } frame = { 0 };
-
-struct { // Represents the frame we are drawing to.
-	int width;
-	int height;
-	uint32_t *pixels;
-} frame2 = { 0 };
 
 typedef struct intersectResult { // Used to hold information about the sphere that may intersect a ray.
 	sphere *s;
@@ -172,7 +161,7 @@ static void generate2DRotMatrix() {
  * we recalculate only when the camera's rotation changes. This will only be called one time, because the code only
  * responds to one rotation change key at a time.
  */
-void invalidateRotationCache() {
+static void invalidateRotationCache() {
 	generate2DRotMatrix();
 	generateRotMatrix();
 }
@@ -214,7 +203,7 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 	switch (message) {
 		case WM_QUIT:
 		case WM_DESTROY: {
-			quit = true;
+			quit = 1;
 		} break;
 
 		case WM_PAINT: {
@@ -251,21 +240,21 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 			vec3 movementX = { 0 };
 			vec3 movementZ = { 0 };
 
-			if (GetAsyncKeyState(VK_W) < 0) { // These keys can all be held down at once
+			if (GetAsyncKeyState('W') < 0) { // These keys can all be held down at once
 				movementZ = multiplyMV(rot2D, &z);
 			}
 
-			if (GetAsyncKeyState(VK_S) < 0) {
+			if (GetAsyncKeyState('S') < 0) {
 				movementZ = multiplyMV(rot2D, &z);
 				movementZ = vecConstMul(-1, &movementZ);
 			}
 
-			if (GetAsyncKeyState(VK_A) < 0) {
+			if (GetAsyncKeyState('A') < 0) {
 				movementX = multiplyMV(rot2D, &x);
 				movementX = vecConstMul(-1, &movementX);
 			}
 
-			if (GetAsyncKeyState(VK_D) < 0) {
+			if (GetAsyncKeyState('D') < 0) {
 				movementX = multiplyMV(rot2D, &x);
 			}
 
@@ -278,10 +267,10 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 			if (GetAsyncKeyState(VK_ESCAPE) < 0) { // Allows the user to disable the cursor lock in the window.
 				pauseCursorLock = !pauseCursorLock;
 				if (pauseCursorLock) {
-					ShowCursor(true);
+					ShowCursor(1);
 				} else {
 					SetCursorPos(screenCenter.left + frame.width / 2, screenCenter.top + frame.height / 2 + 32);
-					ShowCursor(false);
+					ShowCursor(0);
 				}
 			}
 
@@ -295,7 +284,7 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 
 			switch(wParam) { // Only allow one of these at once
 
-				case VK_R: {
+				case 'R': {
 					camera.cameraPos.x = 0;
 					camera.cameraPos.y = 0;
 					camera.cameraPos.z = 0;
@@ -305,18 +294,18 @@ static LRESULT CALLBACK WindowProcessMessage(const HWND windowHandle, const UINT
 					invalidateRotationCache();
 				}break;
 
-				case VK_T: {
+				case 'T': {
 					camera.xRot = 0;
 					camera.yRot = 0;
 					camera.zRot = 0;
 					invalidateRotationCache();
 				}break;
 
-				case VK_J: {
+				case 'J': {
 					addSphere(sceneList, camera.cameraPos, (rgb) { .red = 160, .green = 32, .blue = 240 }, 2, 600, 0.1);
 				}break;
 
-				case VK_L: {
+				case 'L': {
 					addPLight(sceneLight, camera.cameraPos, 0.5);
 				}break;
 			}
@@ -420,19 +409,19 @@ static intersectResult closestIntersection(const vec3 *origin, const vec3 *D, co
  * anyIntersection - Returns if there is any intersection with this ray at all. Used for shadow calculations.
  * With shadows, we only care if the directed light is blocked at all, instead of finding the closest.
  */
-static bool anyIntersection(const vec3 *origin, const vec3 *D, const double t_min, const double t_max, const double dDotD) {
+static uint8_t anyIntersection(const vec3 *origin, const vec3 *D, const double t_min, const double t_max, const double dDotD) {
 	for (sphereList *node = sceneList; node != NULL; node = node->next) {
 		sphereResult result = intersectRaySphere(origin, D, node->data, dDotD);
 
 		if (result.firstT > t_min && result.firstT < t_max) {
-			return true;
+			return 1;
 		}
 
 		if (result.secondT > t_min && result.secondT < t_max) {
-			return true;
+			return 1;
 		}
 	}
-	return false;
+	return 0;
 }
 
 /*
@@ -612,7 +601,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	GetWindowRect(windowHandle, &screenCenter);
 	pointer = LoadCursor(NULL, IDC_ARROW);
-	ShowCursor(false);
+	ShowCursor(0);
 	SetCursorPos(screenCenter.left + frame.width / 2 - 8, screenCenter.top + frame.height / 2 + 1);
 	GetCursorPos(&mouseLoc);
 	centerX = mouseLoc.x;

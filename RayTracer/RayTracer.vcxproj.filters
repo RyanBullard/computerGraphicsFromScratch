@@ -41,9 +41,6 @@
     <ClInclude Include="sphere.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="missingKeys.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="standardHeader.h">
       <Filter>Source Files</Filter>
     </ClInclude>
