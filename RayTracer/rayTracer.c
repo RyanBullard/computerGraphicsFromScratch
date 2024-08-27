@@ -12,10 +12,13 @@
 const int VIEWPORT_WIDTH = 2;
 const int VIEWPORT_HEIGHT = 2;
 const int DISTANCE = 1;
+
 const double M_PI = 3.14159265358979323846;
 const double M_2PI = 6.2831853071795865;
+
 #define FRAMESPERSECOND 60
 #define MAXTHREADS 10
+
 const int MOVESPEED = 5;
 const double sensitivity = 0.001;
 
@@ -185,7 +188,7 @@ static void normalizeRotation() {
 }
 
 /*
- * Handles finding how to rotate the camera based on the change in mouse position each frame.
+ * rotateOnDelta - Handles finding how to rotate the camera based on the change in mouse position each frame.
  */
 static void rotateOnDelta(int dX, int dY) {
 	int relX = dX - centerX;
@@ -601,15 +604,15 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	GetWindowRect(windowHandle, &screenCenter);
 	pointer = LoadCursor(NULL, IDC_ARROW);
-	ShowCursor(0);
+	ShowCursor(FALSE);
 	SetCursorPos(screenCenter.left + frame.width / 2 - 8, screenCenter.top + frame.height / 2 + 1);
 	GetCursorPos(&mouseLoc);
-	centerX = mouseLoc.x;
+	centerX = mouseLoc.x; // Save this info for calculations on the position delta.
 	centerY = mouseLoc.y;
 
-	while (!quit) {
+	QueryPerformanceFrequency(&frequency);
 
-		QueryPerformanceFrequency(&frequency); // Setup to calculate the delta time between the frames.
+	while (!quit) {
 
 		QueryPerformanceCounter(&t1); // Get starting time
 
