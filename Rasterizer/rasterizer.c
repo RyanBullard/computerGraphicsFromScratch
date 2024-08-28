@@ -33,9 +33,9 @@ static HBITMAP frameBitmap = NULL; // The pointer to the bitmap we draw.
 static HDC fdc = NULL; // Represents the device context of our frame.
 
 static rgb background = { // Holds our background color for the scene.
-	.red = 0,
-	.green = 0,
-	.blue = 0
+	.red = 255,
+	.green = 255,
+	.blue = 255
 };
 
 /*
@@ -105,14 +105,72 @@ static void putPixel(const int32_t x, const int32_t y, const rgb c) {
 	const int32_t offsetX = x + (frame.width / 2);
 	const int32_t offsetY = y + (frame.height / 2);
 	if (offsetX > frame.width || offsetY > frame.height || offsetX < 0 || offsetY < 0) {
-		fprintf(stderr, "Pixel out of bounds! x: %d, y: %d\n", x, y);
+		//fprintf(stderr, "Pixel out of bounds! x: %d, y: %d\n", x, y);
 		return;
 	}
 	frame.pixels[offsetY * frame.width + offsetX] = getColor(c);
 }
 
-static void renderScene() {
+static double *interpolate(int32_t startI, double startD, int32_t destI, double destD) {
+	if (startI == destI) {
+		double *arr = malloc(sizeof(double));
+		checkalloc(arr);
+		arr[0] = startD;
+		return arr;
+	}
 
+	double *vals = malloc((destI - startI + 1) * sizeof(double));
+	checkalloc(vals);
+
+	double a = (destD - startD) / (destI - startI);
+	double d = startD;
+
+	for (int i = startI; i <= destI; i++) {
+		vals[i - startI] = d;
+		d += a;
+	}
+
+	return vals;
+}
+
+static void drawLine(int32_t startX, int32_t startY, int32_t destX, int32_t destY, const rgb color) {
+	if (abs(destX - startX) > abs(destY - startY)) {
+		if (destX < startX) { // Swap the coords if dest is before start.
+			int32_t tempX = startX;
+			startX = destX;
+			destX = tempX;
+
+			int32_t tempY = startY;
+			startY = destY;
+			destY = tempY;
+		}
+
+		double *vals = interpolate(startX, startY, destX, destY);
+
+		for (int32_t x = startX; x <= destX; x++) {
+			putPixel(x, round(vals[x - startX]), color);
+		}
+
+		free(vals);
+	} else {
+		if (destY < startY) { // Swap the coords if they are dest is before start.
+			int32_t tempX = startX;
+			startX = destX;
+			destX = tempX;
+
+			int32_t tempY = startY;
+			startY = destY;
+			destY = tempY;
+		}
+
+		double *vals = interpolate(startY, startX, destY, destX);
+
+		for (int32_t y = startY; y <= destY; y++) {
+			putPixel(round(vals[y - startY]), y, color);
+		}
+
+		free(vals);
+	}
 }
 
 /*
@@ -129,7 +187,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	// Windows setup, creates our window and the bitmap we will display to the window.
 
-	const wchar_t windowClassName[] = L"Ray Tracer";
+	const wchar_t windowClassName[] = L"Rasterizer";
 	static WNDCLASS windowClass = { 0 };
 	windowClass.lpfnWndProc = WindowProcessMessage;
 	windowClass.hInstance = hInstance;
@@ -143,7 +201,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	fdc = CreateCompatibleDC(0);
 
 	HWND windowHandle = CreateWindow(windowClassName, L"Ray Tracer", 
-		((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE, 0, 0, 500, 500,
+		((WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME) ^ WS_MAXIMIZEBOX) | WS_VISIBLE, 0, 0, 1000, 1000,
 		NULL, NULL, hInstance, NULL);
 	if (windowHandle == NULL) {
 		return -1;
@@ -157,7 +215,8 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			DispatchMessage(&message);
 		}
 
-		renderScene();
+		drawLine(-50, -200, 60, 240, (rgb) { .blue = 255, .red = 255, .green = 255 });
+		drawLine(-200, -100, 240, 120, (rgb) { .blue = 255, .red = 255, .green = 255 });
 
 		InvalidateRect(windowHandle, NULL, FALSE);
 		UpdateWindow(windowHandle);
